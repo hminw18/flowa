@@ -104,7 +104,7 @@ Rules:
     const translatedText =
       completion.output_text?.trim() ||
       completion.output
-        ?.flatMap((item) => item.content || [])
+        ?.flatMap((item) => (item.type === 'message' ? item.content : []))
         .filter((content) => content.type === 'output_text')
         .map((content) => content.text)
         .join('')
@@ -119,10 +119,13 @@ Rules:
         '[Translation] Output summary',
         completion.output?.map((item) => ({
           type: item.type,
-          contentTypes: item.content?.map((content) => content.type),
-          contentLengths: item.content?.map((content) =>
-            'text' in content && typeof content.text === 'string' ? content.text.length : 0
-          ),
+          contentTypes: item.type === 'message' ? item.content.map((content) => content.type) : undefined,
+          contentLengths:
+            item.type === 'message'
+              ? item.content.map((content) =>
+                  'text' in content && typeof content.text === 'string' ? content.text.length : 0
+                )
+              : undefined,
         }))
       );
       throw new Error('Empty response from OpenAI');

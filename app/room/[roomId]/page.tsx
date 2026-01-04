@@ -147,7 +147,7 @@ export default function RoomPage() {
     (text: string) => {
       const socket = getSocket();
 
-      socket.emit('message:send', { roomId, clientId, originalText: text }, (response) => {
+      socket.emit('message:send', { roomId, clientId, username, originalText: text }, (response) => {
         if (response.ok) {
           console.log('[Room] Message sent:', response.message);
         } else {
