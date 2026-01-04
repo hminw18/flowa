@@ -15,12 +15,27 @@ export default function RoomPage() {
   const roomId = params.roomId as string;
 
   const [clientId] = useState(() => getOrCreateClientId());
+  const [username, setUsername] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
   const [metrics, setMetrics] = useState({ totalMessages: 0, uniqueOpened: 0, openRate: 0 });
 
+  // Check if username exists
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const savedUsername = sessionStorage.getItem('ci_messenger_username');
+    if (!savedUsername) {
+      router.push('/');
+      return;
+    }
+
+    setUsername(savedUsername);
+  }, [router]);
+
   // Initialize socket connection and join room
   useEffect(() => {
+    if (!username) return;
     const socket = getSocket();
 
     // Connection event handlers
@@ -29,7 +44,7 @@ export default function RoomPage() {
       setConnectionStatus('connected');
 
       // Join room
-      socket.emit('room:join', { roomId, clientId }, (response) => {
+      socket.emit('room:join', { roomId, clientId, username }, (response) => {
         if (response.ok) {
           console.log('[Room] Joined successfully');
         } else {
@@ -125,7 +140,7 @@ export default function RoomPage() {
       socket.off('message:translationError', handleTranslationError);
       socket.off('room:metrics:update', handleMetricsUpdate);
     };
-  }, [roomId, clientId]);
+  }, [roomId, clientId, username]);
 
   // Send message handler
   const handleSendMessage = useCallback(
