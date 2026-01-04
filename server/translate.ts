@@ -5,17 +5,32 @@
 
 import OpenAI from 'openai';
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const MAX_TEXT_LENGTH = 500;
 const TIMEOUT_MS = 10000;
 
 let openai: OpenAI | null = null;
+let configLogged = false;
 
 /**
  * Initialize OpenAI client
  */
 function getOpenAIClient(): OpenAI | null {
+  // Read env vars at runtime (lazy evaluation)
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+  const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+
+  // Log configuration once
+  if (!configLogged) {
+    console.log('=== OpenAI Configuration (Runtime) ===');
+    console.log('OPENAI_API_KEY exists:', !!OPENAI_API_KEY);
+    console.log('OPENAI_API_KEY length:', OPENAI_API_KEY.length);
+    console.log('OPENAI_API_KEY preview:', OPENAI_API_KEY ? `${OPENAI_API_KEY.substring(0, 10)}...${OPENAI_API_KEY.substring(OPENAI_API_KEY.length - 4)}` : 'NOT SET');
+    console.log('OPENAI_MODEL:', OPENAI_MODEL);
+    console.log('All env vars with OPENAI prefix:', Object.keys(process.env).filter(k => k.startsWith('OPENAI')));
+    console.log('======================================');
+    configLogged = true;
+  }
+
   if (!OPENAI_API_KEY) {
     return null;
   }
@@ -49,9 +64,15 @@ export async function translateKoToEn(text: string): Promise<string> {
 
   // If OpenAI is not configured, use stub
   if (!client) {
-    console.warn('OpenAI API not configured, using stub translation');
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+    console.warn('[Translation] OpenAI API not configured, using stub translation');
+    console.warn('[Translation] Reason: OPENAI_API_KEY is', OPENAI_API_KEY ? 'set but invalid' : 'NOT SET');
+    console.warn('[Translation] Check your .env.local file or environment variables');
     return translateStub(text);
   }
+
+  const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+  console.log('[Translation] Using OpenAI API with model:', OPENAI_MODEL);
 
   try {
     // Create translation request with timeout
@@ -59,32 +80,51 @@ export async function translateKoToEn(text: string): Promise<string> {
       setTimeout(() => reject(new Error('Translation timeout')), TIMEOUT_MS);
     });
 
-    const translationPromise = client.chat.completions.create({
+    const reasoning =
+      OPENAI_MODEL.startsWith('o') || OPENAI_MODEL.startsWith('gpt-5')
+        ? { effort: 'low' as const }
+        : undefined;
+
+    const translationPromise = client.responses.create({
       model: OPENAI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: `You are a Korean to English translator. Translate the given Korean text to natural English.
+      instructions: `You are a Korean to English translator. Translate the given Korean text to natural English.
 Rules:
 - Provide direct, literal translation
 - Maintain the original tone and meaning
 - Output only the translated text, no explanations
 - Keep the same sentence structure when possible`,
-        },
-        {
-          role: 'user',
-          content: text,
-        },
-      ],
-      temperature: 0.3,
-      max_tokens: 200,
+      input: text,
+      max_output_tokens: 400,
+      reasoning,
+      text: { format: { type: 'text' } },
     });
 
     const completion = await Promise.race([translationPromise, timeoutPromise]);
 
-    const translatedText = completion.choices[0]?.message?.content?.trim();
+    const translatedText =
+      completion.output_text?.trim() ||
+      completion.output
+        ?.flatMap((item) => item.content || [])
+        .filter((content) => content.type === 'output_text')
+        .map((content) => content.text)
+        .join('')
+        .trim();
 
     if (!translatedText) {
+      console.warn('[Translation] Empty output_text', {
+        id: completion.id,
+        outputItems: completion.output?.length ?? 0,
+      });
+      console.warn(
+        '[Translation] Output summary',
+        completion.output?.map((item) => ({
+          type: item.type,
+          contentTypes: item.content?.map((content) => content.type),
+          contentLengths: item.content?.map((content) =>
+            'text' in content && typeof content.text === 'string' ? content.text.length : 0
+          ),
+        }))
+      );
       throw new Error('Empty response from OpenAI');
     }
 
@@ -92,11 +132,20 @@ Rules:
   } catch (error) {
     console.error('[Translation] OpenAI error:', error);
 
+    if (error instanceof Error) {
+      console.error('[Translation] Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+      });
+    }
+
     // Fallback to stub on error
     if (error instanceof Error && error.message === 'Translation timeout') {
-      console.warn('[Translation] Timeout, falling back to stub');
+      console.warn('[Translation] Timeout (>10s), falling back to stub');
     } else {
       console.warn('[Translation] API error, falling back to stub');
+      console.warn('[Translation] Possible reasons: Invalid API key, network issue, rate limit');
     }
 
     return translateStub(text);

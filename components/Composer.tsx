@@ -75,11 +75,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '16px',
     fontWeight: '600',
     color: 'white',
-    background: '#007bff',
+    background: '#4A90E2',
     border: 'none',
     borderRadius: '24px',
     transition: 'background 0.2s',
     whiteSpace: 'nowrap',
+    cursor: 'pointer',
   },
   buttonDisabled: {
     background: '#cccccc',

@@ -253,7 +253,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     height: '100vh',
-    background: '#f5f5f5',
+    background: '#E8EAF6',
   },
   header: {
     background: 'white',

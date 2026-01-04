@@ -28,7 +28,9 @@ export default function MessageList({
   if (messages.length === 0) {
     return (
       <div style={styles.emptyState}>
-        <p>No messages yet. Start the conversation!</p>
+        <div style={styles.emptyIcon}>💬</div>
+        <p style={styles.emptyText}>No messages yet</p>
+        <p style={styles.emptySubtext}>Start the conversation in Korean!</p>
       </div>
     );
   }
@@ -60,14 +62,29 @@ const styles: Record<string, React.CSSProperties> = {
   messageList: {
     flex: 1,
     overflowY: 'auto',
-    padding: '16px 0',
+    padding: '20px 0 16px 0',
   },
   emptyState: {
     flex: 1,
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: '12px',
+  },
+  emptyIcon: {
+    fontSize: '48px',
+    opacity: 0.5,
+  },
+  emptyText: {
+    fontSize: '16px',
+    fontWeight: '500',
+    color: '#666',
+    margin: 0,
+  },
+  emptySubtext: {
+    fontSize: '13px',
     color: '#999',
-    fontSize: '14px',
+    margin: 0,
   },
 };
