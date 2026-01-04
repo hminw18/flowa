@@ -169,13 +169,19 @@ Priority order for selecting expressions to highlight:
 
 Since this app uses Socket.io with long-lived connections, we recommend:
 
-- Railway
+- **Railway** (가장 추천) - [배포 가이드 보기](./DEPLOYMENT.md)
 - Fly.io
 - Render
 - DigitalOcean App Platform
 - Any Node.js hosting with WebSocket support
 
 **Note**: Vercel serverless functions have limitations with WebSocket connections. For stable Socket.io operation, use a traditional Node.js hosting platform.
+
+### Quick Deploy to Railway
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/new)
+
+또는 [상세 Railway 배포 가이드](./DEPLOYMENT.md)를 참고하세요.
 
 ### Environment Variables
 

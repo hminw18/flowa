@@ -8,7 +8,7 @@ import next from 'next';
 import { initSocketServer } from './server/socket-server';
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = 'localhost';
+const hostname = dev ? 'localhost' : '0.0.0.0';
 const port = parseInt(process.env.PORT || '3000', 10);
 
 const app = next({ dev, hostname, port });
@@ -30,7 +30,7 @@ app.prepare().then(() => {
   initSocketServer(httpServer);
   console.log('[Server] Socket.io initialized');
 
-  httpServer.listen(port, () => {
+  httpServer.listen(port, hostname, () => {
     console.log(`[Server] Ready on http://${hostname}:${port}`);
   });
 });
