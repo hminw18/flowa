@@ -47,10 +47,23 @@ Railway 대시보드에서:
    - `OPENAI_API_KEY` = `sk-proj-xxxxx` (필수)
    - `OPENAI_MODEL` = `gpt-4o-mini` (선택사항, 기본값)
    - `NODE_ENV` = `production` (자동 설정됨)
+   - `DATABASE_URL` = Railway Postgres 연결 문자열 (필수)
 
 **OpenAI API 키 발급**: [상세 가이드 보기](./OPENAI_SETUP.md#1-openai-api-키-발급)
 
-#### 4단계: 배포 완료
+#### 4단계: 데이터베이스 설정
+
+Railway에서 **Postgres** 서비스를 추가한 뒤, 스키마를 적용해야 합니다.
+
+1. Railway 프로젝트에서 **"New" → "Database" → "PostgreSQL"** 추가
+2. 서비스 변수로 `DATABASE_URL`이 자동 주입되는지 확인
+3. 로컬에서 스키마 적용:
+
+```bash
+psql "$DATABASE_URL" -f server/schema.sql
+```
+
+#### 5단계: 배포 완료
 
 - Railway가 자동으로 빌드하고 배포합니다
 - 배포 완료 후 URL이 생성됩니다 (예: `https://your-app.railway.app`)
@@ -101,13 +114,22 @@ railway variables set OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxx
 # 모델 설정 (선택사항)
 railway variables set OPENAI_MODEL=gpt-4o-mini
 
+# Postgres 연결 (Railway Postgres 추가 시 자동 제공)
+# railway variables set DATABASE_URL=postgresql://...
+
 # 또는 .env 파일에서 일괄 업로드
 railway variables set -f .env
 ```
 
 **OpenAI API 키 발급**: [상세 가이드](./OPENAI_SETUP.md#1-openai-api-키-발급)
 
-#### 5단계: 배포
+#### 5단계: DB 스키마 적용
+
+```bash
+psql "$DATABASE_URL" -f server/schema.sql
+```
+
+#### 6단계: 배포
 
 ```bash
 # 배포 실행

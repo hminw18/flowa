@@ -15,7 +15,6 @@ import {
 } from '../lib/types';
 import {
   getOrCreateRoom,
-  getRoom,
   addClientToRoom,
   removeClientFromRoom,
   addMessage,
@@ -60,7 +59,7 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
     console.log(`[Socket] Client connected: ${socket.id}`);
 
     // room:join handler
-    socket.on('room:join', (payload, callback) => {
+    socket.on('room:join', async (payload, callback) => {
       const { roomId, clientId, username } = payload;
 
       if (!roomId || !clientId || !username) {
@@ -75,10 +74,10 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
       socket.data.username = username;
 
       // Add to room store
-      addClientToRoom(roomId, clientId);
+      await addClientToRoom(roomId, clientId);
 
       // Send message history to the new client
-      const room = getOrCreateRoom(roomId);
+      const room = await getOrCreateRoom(roomId);
       socket.emit('message:history', room.messages);
 
       console.log(`[Room] ${username} (${clientId}) joined room ${roomId}`);
@@ -123,7 +122,7 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
       };
 
       // Add to store
-      addMessage(roomId, message);
+      await addMessage(roomId, message);
 
       // Broadcast to room
       io.to(roomId).emit('message:new', message);
@@ -136,7 +135,7 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
     });
 
     // translation:open handler
-    socket.on('translation:open', (payload, callback) => {
+    socket.on('translation:open', async (payload, callback) => {
       const { roomId, clientId, messageId } = payload;
 
       if (!roomId || !clientId || !messageId) {
@@ -145,10 +144,10 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
       }
 
       // Record metrics
-      recordTranslationOpen(roomId, messageId);
+      await recordTranslationOpen(roomId, messageId);
 
       // Get updated metrics
-      const metrics = getRoomMetrics(roomId);
+      const metrics = await getRoomMetrics(roomId);
 
       // Broadcast metrics update (optional)
       io.to(roomId).emit('room:metrics:update', metrics);
@@ -157,7 +156,7 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
     });
 
     // room:metrics:get handler
-    socket.on('room:metrics:get', (payload, callback) => {
+    socket.on('room:metrics:get', async (payload, callback) => {
       const { roomId } = payload;
 
       if (!roomId) {
@@ -165,15 +164,15 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
         return;
       }
 
-      const metrics = getRoomMetrics(roomId);
+      const metrics = await getRoomMetrics(roomId);
       callback({ ok: true, metrics });
     });
 
     // Handle disconnect
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       const { roomId, clientId } = socket.data;
       if (roomId && clientId) {
-        removeClientFromRoom(roomId, clientId);
+        await removeClientFromRoom(roomId, clientId);
         console.log(`[Room] Client ${clientId} left room ${roomId}`);
       }
       console.log(`[Socket] Client disconnected: ${socket.id}`);
@@ -196,7 +195,7 @@ async function translateMessage(
     const highlightSpan = selectHighlight(translatedText);
 
     // Update message in store
-    updateMessageTranslation(message.roomId, message.messageId, translatedText, highlightSpan);
+    await updateMessageTranslation(message.roomId, message.messageId, translatedText, highlightSpan);
 
     // Notify clients
     io.to(message.roomId).emit('message:translationReady', {
@@ -210,7 +209,7 @@ async function translateMessage(
     console.error(`[Translation] Error for message ${message.messageId}:`, error);
 
     // Mark as error
-    markTranslationError(message.roomId, message.messageId);
+    await markTranslationError(message.roomId, message.messageId);
 
     // Notify clients
     io.to(message.roomId).emit('message:translationError', {
