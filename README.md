@@ -16,6 +16,7 @@ Real-time 1:1 chat application with translation features for language learning.
 - **Frontend**: Next.js 14 (App Router), React, TypeScript
 - **Backend**: Node.js, Socket.io
 - **Real-time**: WebSocket (Socket.io)
+- **Translation**: OpenAI API (gpt-4o-mini)
 - **Storage**: In-memory (server RAM)
 
 ## Project Structure
@@ -52,30 +53,31 @@ server.js                    # Custom Next.js server entry point
 
 - Node.js 18+
 - npm or yarn
+- OpenAI API Key (권장) - [발급 방법](./OPENAI_SETUP.md)
 
 ### Installation
 
 1. Clone the repository
+
 2. Install dependencies:
 
 ```bash
 npm install
 ```
 
-3. Create environment file:
+3. Configure OpenAI API (권장):
 
 ```bash
-cp .env.example .env
+# 환경 변수 파일 생성
+cp .env.local.example .env.local
+
+# .env.local 파일을 열고 OpenAI API 키 입력
+OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxx
 ```
 
-4. (Optional) Configure translation API in `.env`:
+**OpenAI API 키 발급 방법**: [상세 가이드 보기](./OPENAI_SETUP.md)
 
-```env
-TRANSLATION_API_KEY=your_api_key_here
-TRANSLATION_API_BASE_URL=https://api.example.com/translate
-```
-
-Note: The app includes a stub translation implementation for demo purposes. It will work without API configuration.
+**Note**: OpenAI API가 설정되지 않으면 자동으로 stub 번역(25개 문구 하드코딩)을 사용합니다. 실제 사용을 위해서는 API 설정을 권장합니다.
 
 ### Development
 
@@ -187,16 +189,25 @@ Since this app uses Socket.io with long-lived connections, we recommend:
 
 - `PORT` - Server port (default: 3000)
 - `NODE_ENV` - Environment (production/development)
+- `OPENAI_API_KEY` - OpenAI API key for translation (권장)
+- `OPENAI_MODEL` - OpenAI model (default: gpt-4o-mini)
 - `ALLOWED_ORIGIN` - CORS allowed origin (production only)
-- `TRANSLATION_API_KEY` - Translation API key (optional)
-- `TRANSLATION_API_BASE_URL` - Translation API URL (optional)
+
+## Translation
+
+이 앱은 **OpenAI API**를 사용하여 한국어를 영어로 번역합니다.
+
+- **기본 모델**: gpt-4o-mini (빠르고 저렴)
+- **예상 비용**: 메시지 1,000개당 약 $0.03
+- **Fallback**: API 실패 시 stub 번역 자동 전환
+
+자세한 설정 방법: [OpenAI 설정 가이드](./OPENAI_SETUP.md)
 
 ## Known Limitations (Demo Scope)
 
 - No persistent storage - messages lost on server restart
 - No authentication or user accounts
 - No chat history
-- Translation API is stubbed (uses simple Korean-English mapping)
 - No mobile native app
 - Single room sessions only
 

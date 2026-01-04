@@ -5,46 +5,53 @@ import { useRouter } from 'next/navigation';
 
 export default function HomePage() {
   const router = useRouter();
-  const [roomId, setRoomId] = useState('');
+  const [username, setUsername] = useState('');
 
-  const handleJoinRoom = (e: React.FormEvent) => {
+  const handleJoinChat = (e: React.FormEvent) => {
     e.preventDefault();
-    if (roomId.trim()) {
-      router.push(`/room/${encodeURIComponent(roomId.trim())}`);
-    }
-  };
+    const trimmedUsername = username.trim();
 
-  const handleCreateRoom = () => {
-    const newRoomId = `room_${Date.now()}`;
-    router.push(`/room/${newRoomId}`);
+    if (trimmedUsername) {
+      // Save username to sessionStorage
+      sessionStorage.setItem('ci_messenger_username', trimmedUsername);
+      router.push('/chat');
+    }
   };
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
         <h1 style={styles.title}>CI Messenger</h1>
-        <p style={styles.subtitle}>Real-time 1:1 Chat with Translation</p>
+        <p style={styles.subtitle}>Real-time Group Chat with Translation</p>
 
-        <form onSubmit={handleJoinRoom} style={styles.form}>
+        <form onSubmit={handleJoinChat} style={styles.form}>
+          <label style={styles.label}>Enter your name:</label>
           <input
             type="text"
-            placeholder="Enter room ID"
-            value={roomId}
-            onChange={(e) => setRoomId(e.target.value)}
+            placeholder="Your name (e.g., John)"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             style={styles.input}
+            maxLength={20}
+            autoFocus
           />
-          <button type="submit" style={styles.buttonPrimary}>
-            Join Room
+          <button
+            type="submit"
+            style={{
+              ...styles.button,
+              ...(username.trim() ? {} : styles.buttonDisabled),
+            }}
+            disabled={!username.trim()}
+          >
+            Join Chat
           </button>
         </form>
 
-        <div style={styles.divider}>
-          <span style={styles.dividerText}>or</span>
+        <div style={styles.info}>
+          <p style={styles.infoText}>
+            Type in Korean and see English translations with highlighted expressions
+          </p>
         </div>
-
-        <button onClick={handleCreateRoom} style={styles.buttonSecondary}>
-          Create New Room
-        </button>
       </div>
     </div>
   );
@@ -57,70 +64,75 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     minHeight: '100vh',
     padding: '20px',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
   },
   card: {
     background: 'white',
-    borderRadius: '12px',
-    padding: '40px',
-    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-    maxWidth: '400px',
+    borderRadius: '16px',
+    padding: '48px',
+    boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)',
+    maxWidth: '450px',
     width: '100%',
   },
   title: {
-    fontSize: '28px',
+    fontSize: '32px',
     fontWeight: 'bold',
     marginBottom: '8px',
     color: '#333',
     textAlign: 'center',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
   },
   subtitle: {
     fontSize: '14px',
     color: '#666',
-    marginBottom: '32px',
+    marginBottom: '40px',
     textAlign: 'center',
   },
   form: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
+    gap: '16px',
+  },
+  label: {
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#444',
   },
   input: {
-    padding: '12px 16px',
+    padding: '14px 16px',
     fontSize: '16px',
     border: '2px solid #e0e0e0',
     borderRadius: '8px',
     outline: 'none',
     transition: 'border-color 0.2s',
   },
-  buttonPrimary: {
-    padding: '12px 24px',
+  button: {
+    padding: '14px 24px',
     fontSize: '16px',
     fontWeight: '600',
     color: 'white',
-    background: '#007bff',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     border: 'none',
     borderRadius: '8px',
-    transition: 'background 0.2s',
+    cursor: 'pointer',
+    transition: 'transform 0.2s, box-shadow 0.2s',
   },
-  buttonSecondary: {
-    padding: '12px 24px',
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#007bff',
-    background: 'white',
-    border: '2px solid #007bff',
+  buttonDisabled: {
+    opacity: 0.5,
+    cursor: 'not-allowed',
+  },
+  info: {
+    marginTop: '32px',
+    padding: '16px',
+    background: '#f5f7fa',
     borderRadius: '8px',
-    transition: 'all 0.2s',
   },
-  divider: {
-    display: 'flex',
-    alignItems: 'center',
-    margin: '24px 0',
-  },
-  dividerText: {
-    flex: 1,
+  infoText: {
+    fontSize: '13px',
+    color: '#666',
     textAlign: 'center',
-    color: '#999',
-    fontSize: '14px',
+    margin: 0,
   },
 };

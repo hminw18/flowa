@@ -53,6 +53,11 @@ export default function MessageBubble({
         ...(isOwn ? styles.containerOwn : styles.containerOther),
       }}
     >
+      {/* Username label for other users */}
+      {!isOwn && (
+        <div style={styles.usernameLabel}>{message.senderUsername}</div>
+      )}
+
       <div
         style={{
           ...styles.bubble,
@@ -104,14 +109,22 @@ export default function MessageBubble({
 const styles: Record<string, React.CSSProperties> = {
   container: {
     display: 'flex',
+    flexDirection: 'column',
     marginBottom: '12px',
     padding: '0 16px',
   },
   containerOwn: {
-    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
   },
   containerOther: {
-    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+  },
+  usernameLabel: {
+    fontSize: '11px',
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: '4px',
+    marginLeft: '4px',
   },
   bubble: {
     maxWidth: '70%',

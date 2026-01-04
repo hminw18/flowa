@@ -13,12 +13,16 @@ let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
  */
 export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> {
   if (!socket) {
-    const url = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000';
+    // Automatically use current domain in production, localhost in development
+    const url = process.env.NEXT_PUBLIC_SOCKET_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+
     socket = io(url, {
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 5,
+      transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
     });
 
     socket.on('connect', () => {

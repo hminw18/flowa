@@ -36,15 +36,19 @@ git push -u origin main
 4. GitHub 저장소 연결 및 권한 부여
 5. 배포할 저장소 선택
 
-#### 3단계: 환경 변수 설정 (선택사항)
+#### 3단계: 환경 변수 설정 (필수)
+
+**중요**: 번역 기능을 위해 OpenAI API 키를 설정해야 합니다.
 
 Railway 대시보드에서:
 1. 프로젝트 클릭
 2. **"Variables"** 탭 클릭
 3. 환경 변수 추가:
-   - `NODE_ENV` = `production`
-   - `TRANSLATION_API_KEY` = `your_api_key` (API 사용 시)
-   - `TRANSLATION_API_BASE_URL` = `your_api_url` (API 사용 시)
+   - `OPENAI_API_KEY` = `sk-proj-xxxxx` (필수)
+   - `OPENAI_MODEL` = `gpt-4o-mini` (선택사항, 기본값)
+   - `NODE_ENV` = `production` (자동 설정됨)
+
+**OpenAI API 키 발급**: [상세 가이드 보기](./OPENAI_SETUP.md#1-openai-api-키-발급)
 
 #### 4단계: 배포 완료
 
@@ -88,15 +92,20 @@ railway init
 
 프로젝트 이름을 입력하고 생성합니다.
 
-#### 4단계: 환경 변수 설정 (선택사항)
+#### 4단계: 환경 변수 설정 (필수)
 
 ```bash
-# 개별 변수 설정
-railway variables set NODE_ENV=production
+# OpenAI API 키 설정 (필수)
+railway variables set OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxx
+
+# 모델 설정 (선택사항)
+railway variables set OPENAI_MODEL=gpt-4o-mini
 
 # 또는 .env 파일에서 일괄 업로드
 railway variables set -f .env
 ```
+
+**OpenAI API 키 발급**: [상세 가이드](./OPENAI_SETUP.md#1-openai-api-키-발급)
 
 #### 5단계: 배포
 
@@ -205,15 +214,23 @@ Railway는 기본적으로 GitHub의 main 브랜치에 푸시할 때마다 자�
 
 ## 비용 관련
 
-Railway 요금제:
+### Railway 호스팅 비용
 - **Developer Plan**: $5/월 - 500시간 + $0.000231/분
 - **Hobby Plan**: $20/월 - 무제한
 
-이 프로젝트는 Hobby Plan으로 충분합니다.
+### OpenAI API 비용
+- **gpt-4o-mini**: $0.150 (입력) / $0.600 (출력) per 1M tokens
+- **예상 비용**: 메시지 1,000개당 약 $0.03
+
+### 총 예상 비용
+- **Railway**: $20/월 (Hobby Plan)
+- **OpenAI**: ~$1-3/월 (일반적인 사용)
+- **총**: 약 $21-23/월
 
 **비용 절감 팁:**
-- 사용하지 않을 때는 프로젝트 일시정지
-- Railway 대시보드에서 사용량 모니터링
+- 사용하지 않을 때는 Railway 프로젝트 일시정지
+- OpenAI 사용량 제한 설정 (Billing → Usage limits)
+- Railway/OpenAI 대시보드에서 사용량 모니터링
 
 ---
 

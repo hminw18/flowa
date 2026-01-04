@@ -15,6 +15,7 @@ import {
 } from '../lib/types';
 import {
   getOrCreateRoom,
+  getRoom,
   addClientToRoom,
   removeClientFromRoom,
   addMessage,
@@ -48,11 +49,11 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
     SocketData
   >(httpServer, {
     cors: {
-      origin: process.env.NODE_ENV === 'production'
-        ? process.env.ALLOWED_ORIGIN || 'http://localhost:3000'
-        : '*',
+      origin: process.env.ALLOWED_ORIGIN || '*',
       methods: ['GET', 'POST'],
+      credentials: true,
     },
+    transports: ['websocket', 'polling'],
   });
 
   io.on('connection', (socket) => {
@@ -60,10 +61,10 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
 
     // room:join handler
     socket.on('room:join', (payload, callback) => {
-      const { roomId, clientId } = payload;
+      const { roomId, clientId, username } = payload;
 
-      if (!roomId || !clientId) {
-        callback({ ok: false, error: 'Missing roomId or clientId' });
+      if (!roomId || !clientId || !username) {
+        callback({ ok: false, error: 'Missing roomId, clientId, or username' });
         return;
       }
 
@@ -71,20 +72,25 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
       socket.join(roomId);
       socket.data.roomId = roomId;
       socket.data.clientId = clientId;
+      socket.data.username = username;
 
       // Add to room store
       addClientToRoom(roomId, clientId);
 
-      console.log(`[Room] Client ${clientId} joined room ${roomId}`);
+      // Send message history to the new client
+      const room = getOrCreateRoom(roomId);
+      socket.emit('message:history', room.messages);
+
+      console.log(`[Room] ${username} (${clientId}) joined room ${roomId}`);
       callback({ ok: true });
     });
 
     // message:send handler
     socket.on('message:send', async (payload, callback) => {
-      const { roomId, clientId, originalText } = payload;
+      const { roomId, clientId, username, originalText } = payload;
 
       // Validation
-      if (!roomId || !clientId || !originalText) {
+      if (!roomId || !clientId || !username || !originalText) {
         callback({ ok: false, error: 'Missing required fields' });
         return;
       }
@@ -110,6 +116,7 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
         messageId: uuidv4(),
         roomId,
         senderClientId: clientId,
+        senderUsername: username,
         originalText,
         createdAt: Date.now(),
         translationStatus: 'pending',

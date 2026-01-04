@@ -3,6 +3,7 @@ export type Message = {
   messageId: string;         // uuid
   roomId: string;
   senderClientId: string;
+  senderUsername: string;    // User's display name
   originalText: string;      // Korean
   createdAt: number;         // epoch ms
 
@@ -39,15 +40,16 @@ export interface ServerToClientEvents {
     uniqueOpened: number;
     openRate: number;
   }) => void;
+  "message:history": (messages: Message[]) => void;
 }
 
 export interface ClientToServerEvents {
   "room:join": (
-    payload: { roomId: string; clientId: string },
+    payload: { roomId: string; clientId: string; username: string },
     callback: (response: { ok: true } | { ok: false; error: string }) => void
   ) => void;
   "message:send": (
-    payload: { roomId: string; clientId: string; originalText: string },
+    payload: { roomId: string; clientId: string; username: string; originalText: string },
     callback: (response: { ok: true; message: Message } | { ok: false; error: string }) => void
   ) => void;
   "translation:open": (
@@ -68,4 +70,8 @@ export interface InterServerEvents {}
 export interface SocketData {
   clientId?: string;
   roomId?: string;
+  username?: string;
 }
+
+// Global room ID
+export const GLOBAL_ROOM_ID = 'global';

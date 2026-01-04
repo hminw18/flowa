@@ -1,15 +1,36 @@
 /**
  * Translation module
- * Translates Korean text to English using external API
+ * Translates Korean text to English using OpenAI API
  */
 
-const TRANSLATION_API_KEY = process.env.TRANSLATION_API_KEY || '';
-const TRANSLATION_API_BASE_URL = process.env.TRANSLATION_API_BASE_URL || '';
+import OpenAI from 'openai';
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const MAX_TEXT_LENGTH = 500;
-const TIMEOUT_MS = 5000;
+const TIMEOUT_MS = 10000;
+
+let openai: OpenAI | null = null;
 
 /**
- * Translates Korean text to English
+ * Initialize OpenAI client
+ */
+function getOpenAIClient(): OpenAI | null {
+  if (!OPENAI_API_KEY) {
+    return null;
+  }
+
+  if (!openai) {
+    openai = new OpenAI({
+      apiKey: OPENAI_API_KEY,
+    });
+  }
+
+  return openai;
+}
+
+/**
+ * Translates Korean text to English using OpenAI
  * @param text Korean text to translate
  * @returns English translation
  * @throws Error if translation fails
@@ -24,56 +45,66 @@ export async function translateKoToEn(text: string): Promise<string> {
     throw new Error('Empty text provided');
   }
 
-  // For demo purposes, use a simple stub implementation
-  // In production, replace with actual API call
-  if (!TRANSLATION_API_KEY || !TRANSLATION_API_BASE_URL) {
-    console.warn('Translation API not configured, using stub translation');
+  const client = getOpenAIClient();
+
+  // If OpenAI is not configured, use stub
+  if (!client) {
+    console.warn('OpenAI API not configured, using stub translation');
     return translateStub(text);
   }
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
-    const response = await fetch(TRANSLATION_API_BASE_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${TRANSLATION_API_KEY}`,
-      },
-      body: JSON.stringify({
-        text,
-        source: 'ko',
-        target: 'en',
-      }),
-      signal: controller.signal,
+    // Create translation request with timeout
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Translation timeout')), TIMEOUT_MS);
     });
 
-    clearTimeout(timeoutId);
+    const translationPromise = client.chat.completions.create({
+      model: OPENAI_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: `You are a Korean to English translator. Translate the given Korean text to natural English.
+Rules:
+- Provide direct, literal translation
+- Maintain the original tone and meaning
+- Output only the translated text, no explanations
+- Keep the same sentence structure when possible`,
+        },
+        {
+          role: 'user',
+          content: text,
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 200,
+    });
 
-    if (!response.ok) {
-      throw new Error(`Translation API error: ${response.status}`);
+    const completion = await Promise.race([translationPromise, timeoutPromise]);
+
+    const translatedText = completion.choices[0]?.message?.content?.trim();
+
+    if (!translatedText) {
+      throw new Error('Empty response from OpenAI');
     }
 
-    const data = await response.json();
-    return data.translatedText || data.text || '';
+    return translatedText;
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Translation timeout');
+    console.error('[Translation] OpenAI error:', error);
+
+    // Fallback to stub on error
+    if (error instanceof Error && error.message === 'Translation timeout') {
+      console.warn('[Translation] Timeout, falling back to stub');
+    } else {
+      console.warn('[Translation] API error, falling back to stub');
     }
 
-    // Retry once on failure
-    console.warn('Translation failed, retrying once...', error);
-    try {
-      return await translateStub(text);
-    } catch (retryError) {
-      throw new Error(`Translation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    return translateStub(text);
   }
 }
 
 /**
- * Stub translation for demo/development
+ * Stub translation for demo/development/fallback
  * Uses simple word-by-word mapping with common phrases
  */
 function translateStub(text: string): Promise<string> {
@@ -98,6 +129,15 @@ function translateStub(text: string): Promise<string> {
         '이해했어요': 'I understood',
         '모르겠어요': 'I do not know',
         '다시 말씀해 주세요': 'Please say that again',
+        '오늘 뭐 먹었어요?': 'What did you eat today?',
+        '점심 먹었어요': 'I ate lunch',
+        '배고파요': 'I am hungry',
+        '피곤해요': 'I am tired',
+        '행복해요': 'I am happy',
+        '슬퍼요': 'I am sad',
+        '괜찮아요': 'I am okay',
+        '미안해요': 'I am sorry',
+        '사랑해요': 'I love you',
       };
 
       // Check for exact match
@@ -109,9 +149,11 @@ function translateStub(text: string): Promise<string> {
 
       // Fallback: create a plausible translation by using parts
       const words = text.split(' ');
-      const translated = words.map(word => {
-        return translations[word] || word;
-      }).join(' ');
+      const translated = words
+        .map((word) => {
+          return translations[word] || word;
+        })
+        .join(' ');
 
       // If no translation found, create generic placeholder
       if (translated === text) {
