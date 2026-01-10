@@ -14,19 +14,23 @@ async function runMigration() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     console.error('❌ DATABASE_URL is not set');
+    console.log('Available env vars:', Object.keys(process.env).filter(k => k.includes('DATABASE')));
     process.exit(1);
   }
 
+  console.log('📡 Connecting to database...');
+
+  // Always use SSL for Railway
   const pool = new Pool({
     connectionString: databaseUrl,
-    ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+    ssl: { rejectUnauthorized: false },
   });
 
   try {
     console.log('🔄 Running migration...');
 
     // Read migration SQL file
-    const migrationSql = readFileSync(join(__dirname, '../server/migrate-clean.sql'), 'utf-8');
+    const migrationSql = readFileSync(join(process.cwd(), 'server/migrate-clean.sql'), 'utf-8');
 
     // Execute migration
     await pool.query(migrationSql);
