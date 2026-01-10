@@ -2,9 +2,8 @@
  * Custom Next.js server with Socket.io integration
  */
 
-// Load environment variables from .env.local
-import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
+// Load environment variables from .env.local before other imports
+import './server/env';
 
 console.log('[Server] Environment variables loaded');
 console.log('[Server] OPENAI_API_KEY exists:', !!process.env.OPENAI_API_KEY);

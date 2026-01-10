@@ -1,9 +1,16 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'CI Messenger - Real-time Chat with Translation',
-  description: 'Practice language learning through real-time 1:1 chat with translations',
+  title: 'CI Messenger - Demo',
+  description: 'Multi-language chat demo',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({

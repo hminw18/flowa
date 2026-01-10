@@ -1,76 +1,76 @@
+// Supported languages
+export type Language = 'ko' | 'en' | 'es';
+
+export const LANGUAGE_NAMES: Record<Language, string> = {
+  ko: 'Korean',
+  en: 'English',
+  es: 'Spanish',
+};
+
+export const LANGUAGE_FLAGS: Record<Language, string> = {
+  ko: '🇰🇷',
+  en: '🇺🇸',
+  es: '🇪🇸',
+};
+
 // Message model
 export type Message = {
   messageId: string;         // uuid
   roomId: string;
-  senderClientId: string;
+  senderUserId: string;
   senderUsername: string;    // User's display name
-  originalText: string;      // Korean
+  originalText: string;      // Original message text
+  originalLanguage: Language; // Language of original text
   createdAt: number;         // epoch ms
 
-  translationStatus: "pending" | "ready" | "error";
-  translatedText?: string;   // English
-  highlightSpan?: { start: number; end: number };
+  translations?: Record<Language, string>; // All available translations
+  unreadCount?: number;
 };
 
-// Room runtime state (server memory)
-export type RoomState = {
+export type RoomSummary = {
   roomId: string;
-  clients: Set<string>; // clientId
-  messages: Message[];
-
-  metrics: {
-    totalMessages: number;
-    openedMessageIds: Set<string>; // unique opened translation
-    translationOpens: number;      // total opens
-  };
-  lastActivity: number; // for GC
+  roomType: 'direct' | 'group';
+  name?: string | null;
+  directUser?: { userId: string; username: string } | null;
+  lastMessage?: Message | null;
+  unreadCount: number;
 };
 
 // Socket.io event payloads
 export interface ServerToClientEvents {
   "message:new": (message: Message) => void;
-  "message:translationReady": (payload: {
+  "message:translationsReady": (payload: {
     messageId: string;
-    translatedText: string;
-    highlightSpan: { start: number; end: number };
+    translations: Record<Language, string>;
   }) => void;
-  "message:translationError": (payload: { messageId: string }) => void;
-  "room:metrics:update": (payload: {
-    totalMessages: number;
-    uniqueOpened: number;
-    openRate: number;
-  }) => void;
+  "message:readUpdate": (payload: { updates: Array<{ messageId: string; unreadCount: number }> }) => void;
   "message:history": (messages: Message[]) => void;
 }
 
 export interface ClientToServerEvents {
   "room:join": (
-    payload: { roomId: string; clientId: string; username: string },
+    payload: { roomId: string },
     callback: (response: { ok: true } | { ok: false; error: string }) => void
   ) => void;
   "message:send": (
-    payload: { roomId: string; clientId: string; username: string; originalText: string },
+    payload: { roomId: string; originalText: string },
     callback: (response: { ok: true; message: Message } | { ok: false; error: string }) => void
   ) => void;
-  "translation:open": (
-    payload: { roomId: string; clientId: string; messageId: string },
-    callback: (response: { ok: true } | { ok: false; error: string }) => void
-  ) => void;
-  "room:metrics:get": (
+  "room:read": (
     payload: { roomId: string },
-    callback: (response: {
-      ok: true;
-      metrics: { totalMessages: number; uniqueOpened: number; openRate: number };
-    } | { ok: false; error: string }) => void
+    callback: (response: { ok: true } | { ok: false; error: string }) => void
   ) => void;
 }
 
 export interface InterServerEvents {}
 
 export interface SocketData {
-  clientId?: string;
   roomId?: string;
+  userId?: string;
   username?: string;
+  sessionId?: string;
+  nativeLanguage?: Language;
+  learningLanguage?: Language;
 }
 
 // Global room ID

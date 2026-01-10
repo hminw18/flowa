@@ -3,20 +3,20 @@
  * Displays all messages with auto-scroll
  */
 
-import { Message } from '@/lib/types';
+import { Message, Language } from '@/lib/types';
 import MessageBubble from './MessageBubble';
 import { useEffect, useRef } from 'react';
 
 interface MessageListProps {
   messages: Message[];
-  currentClientId: string;
-  onTranslationOpen: (messageId: string) => void;
+  currentUserId: string;
+  userLearningLanguage: Language;
 }
 
 export default function MessageList({
   messages,
-  currentClientId,
-  onTranslationOpen,
+  currentUserId,
+  userLearningLanguage,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -30,7 +30,7 @@ export default function MessageList({
       <div style={styles.emptyState}>
         <div style={styles.emptyIcon}>💬</div>
         <p style={styles.emptyText}>No messages yet</p>
-        <p style={styles.emptySubtext}>Start the conversation in Korean!</p>
+        <p style={styles.emptySubtext}>Start the conversation!</p>
       </div>
     );
   }
@@ -42,8 +42,8 @@ export default function MessageList({
           <MessageBubble
             key={message.messageId}
             message={message}
-            isOwn={message.senderClientId === currentClientId}
-            onTranslationOpen={() => onTranslationOpen(message.messageId)}
+            isOwn={message.senderUserId === currentUserId}
+            userLearningLanguage={userLearningLanguage}
           />
         ))}
         <div ref={bottomRef} />
@@ -58,11 +58,17 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
+    background: 'var(--tg-bg)',
+    backgroundImage:
+      'radial-gradient(circle at 18% 12%, rgba(42, 125, 246, 0.08), transparent 40%), radial-gradient(circle at 82% 0%, rgba(42, 125, 246, 0.06), transparent 45%)',
   },
   messageList: {
     flex: 1,
     overflowY: 'auto',
-    padding: '20px 0 16px 0',
+    padding: '24px 0 20px 0',
+    width: '100%',
+    maxWidth: '1280px',
+    margin: '0 auto',
   },
   emptyState: {
     flex: 1,
@@ -71,20 +77,21 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '12px',
+    color: 'var(--tg-subtext)',
   },
   emptyIcon: {
-    fontSize: '48px',
-    opacity: 0.5,
+    fontSize: '42px',
+    opacity: 0.6,
   },
   emptyText: {
     fontSize: '16px',
-    fontWeight: '500',
-    color: '#666',
+    fontWeight: '600',
+    color: 'var(--tg-text)',
     margin: 0,
   },
   emptySubtext: {
     fontSize: '13px',
-    color: '#999',
+    color: 'var(--tg-subtext)',
     margin: 0,
   },
 };

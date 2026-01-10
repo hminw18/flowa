@@ -7,7 +7,9 @@
     "dev": "tsx server.ts",
     "build": "next build",
     "start": "NODE_ENV=production tsx server.ts",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "db:migrate": "tsx scripts/run-migration.ts",
+    "db:init": "tsx scripts/init-db.ts"
   },
   "dependencies": {
     "@railway/cli": "^4.16.1",

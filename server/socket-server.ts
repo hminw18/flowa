@@ -1,6 +1,6 @@
 /**
  * Socket.io server implementation
- * Handles real-time messaging, translation, and metrics
+ * Handles real-time messaging and multi-language translation
  */
 
 import { Server as SocketIOServer } from 'socket.io';
@@ -12,25 +12,71 @@ import {
   InterServerEvents,
   SocketData,
   Message,
+  Language,
 } from '../lib/types';
 import {
-  getOrCreateRoom,
-  addClientToRoom,
-  removeClientFromRoom,
+  getRoomById,
+  getRoomMessages,
+  isMember,
   addMessage,
-  updateMessageTranslation,
-  markTranslationError,
-  recordTranslationOpen,
-  getRoomMetrics,
+  addTranslations,
+  markRoomRead,
+  getReadUpdates,
 } from './room-store';
-import { translateKoToEn } from './translate';
-import { selectHighlight } from './highlight';
+import { getUserFromRequest } from './auth';
+import { setSessionActive } from './user-store';
+import { translateToAllLanguages } from './translate';
 
 const MAX_MESSAGE_LENGTH = 500;
 const RATE_LIMIT_PER_SECOND = 2;
 
-// Rate limiting map: clientId -> timestamps[]
+// Rate limiting map: userId -> timestamps[]
 const rateLimitMap = new Map<string, number[]>();
+const sessionConnections = new Map<string, number>();
+
+/**
+ * Check rate limit for user
+ */
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const userTimestamps = rateLimitMap.get(userId) || [];
+
+  // Remove timestamps older than 1 second
+  const recentTimestamps = userTimestamps.filter((ts) => now - ts < 1000);
+
+  if (recentTimestamps.length >= RATE_LIMIT_PER_SECOND) {
+    return false;
+  }
+
+  recentTimestamps.push(now);
+  rateLimitMap.set(userId, recentTimestamps);
+  return true;
+}
+
+/**
+ * Translate message and broadcast to room
+ */
+async function translateMessage(io: SocketIOServer, message: Message): Promise<void> {
+  try {
+    console.log(`[Translation] Starting for message ${message.messageId}`);
+
+    const translations = await translateToAllLanguages(message.originalText, message.originalLanguage);
+
+    // Save translations to database
+    await addTranslations(message.messageId, translations);
+
+    // Broadcast translations to room
+    io.to(message.roomId).emit('message:translationsReady', {
+      messageId: message.messageId,
+      translations,
+    });
+
+    console.log(`[Translation] Success for message ${message.messageId}`);
+  } catch (error) {
+    console.error(`[Translation] Failed for message ${message.messageId}:`, error);
+    // Don't broadcast error - messages can still be viewed without translation
+  }
+}
 
 /**
  * Initialize Socket.io server
@@ -55,41 +101,81 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
     transports: ['websocket', 'polling'],
   });
 
+  io.use(async (socket, next) => {
+    try {
+      const user = await getUserFromRequest(socket.request);
+      if (!user) {
+        return next(new Error('Unauthorized'));
+      }
+
+      socket.data.userId = user.userId;
+      socket.data.username = user.username;
+      socket.data.sessionId = user.sessionId;
+      socket.data.nativeLanguage = user.nativeLanguage;
+      socket.data.learningLanguage = user.learningLanguage;
+
+      console.log(
+        `[Socket] User authenticated - ${user.username} (${user.nativeLanguage}→${user.learningLanguage})`
+      );
+
+      const currentCount = sessionConnections.get(user.sessionId) ?? 0;
+      sessionConnections.set(user.sessionId, currentCount + 1);
+      await setSessionActive(user.sessionId, true);
+      return next();
+    } catch (error) {
+      return next(new Error('Unauthorized'));
+    }
+  });
+
   io.on('connection', (socket) => {
     console.log(`[Socket] Client connected: ${socket.id}`);
 
     // room:join handler
     socket.on('room:join', async (payload, callback) => {
-      const { roomId, clientId, username } = payload;
+      const { roomId } = payload;
+      const { userId, username } = socket.data;
 
-      if (!roomId || !clientId || !username) {
-        callback({ ok: false, error: 'Missing roomId, clientId, or username' });
+      if (!roomId || !userId || !username) {
+        callback({ ok: false, error: 'Missing roomId or user context' });
         return;
       }
 
-      // Join socket.io room
+      const room = await getRoomById(roomId);
+      if (!room) {
+        callback({ ok: false, error: 'Room not found' });
+        return;
+      }
+
+      const member = await isMember(roomId, userId);
+      if (!member) {
+        callback({ ok: false, error: 'Not a room member' });
+        return;
+      }
+
       socket.join(roomId);
-      socket.data.roomId = roomId;
-      socket.data.clientId = clientId;
-      socket.data.username = username;
 
-      // Add to room store
-      await addClientToRoom(roomId, clientId);
+      // Send message history
+      const messages = await getRoomMessages(roomId);
+      socket.emit('message:history', messages);
 
-      // Send message history to the new client
-      const room = await getOrCreateRoom(roomId);
-      socket.emit('message:history', room.messages);
+      // Mark room as read
+      await markRoomRead(roomId, userId);
+      const updates = await getReadUpdates(roomId);
+      io.to(roomId).emit('message:readUpdate', { updates });
 
-      console.log(`[Room] ${username} (${clientId}) joined room ${roomId}`);
+      console.log(`[Room] ${username} joined room ${roomId}`);
       callback({ ok: true });
     });
 
     // message:send handler
     socket.on('message:send', async (payload, callback) => {
-      const { roomId, clientId, username, originalText } = payload;
+      const { roomId, originalText } = payload;
+      const { userId, username, nativeLanguage } = socket.data;
+
+      console.log(`[Socket] message:send - User: ${username}, Room: ${roomId}`);
 
       // Validation
-      if (!roomId || !clientId || !username || !originalText) {
+      if (!roomId || !userId || !username || !originalText || !nativeLanguage) {
         callback({ ok: false, error: 'Missing required fields' });
         return;
       }
@@ -104,8 +190,14 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
         return;
       }
 
+      const member = await isMember(roomId, userId);
+      if (!member) {
+        callback({ ok: false, error: 'Not a room member' });
+        return;
+      }
+
       // Rate limiting
-      if (!checkRateLimit(clientId)) {
+      if (!checkRateLimit(userId)) {
         callback({ ok: false, error: 'Rate limit exceeded' });
         return;
       }
@@ -114,147 +206,68 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
       const message: Message = {
         messageId: uuidv4(),
         roomId,
-        senderClientId: clientId,
+        senderUserId: userId,
         senderUsername: username,
         originalText,
+        originalLanguage: nativeLanguage,
         createdAt: Date.now(),
-        translationStatus: 'pending',
       };
 
       // Add to store
-      await addMessage(roomId, message);
+      const storedMessage = await addMessage(roomId, message);
 
       // Broadcast to room
-      io.to(roomId).emit('message:new', message);
+      io.to(roomId).emit('message:new', storedMessage);
 
       // Respond to sender
-      callback({ ok: true, message });
+      callback({ ok: true, message: storedMessage });
 
       // Trigger translation (async, non-blocking)
       translateMessage(io, message);
     });
 
-    // translation:open handler
-    socket.on('translation:open', async (payload, callback) => {
-      const { roomId, clientId, messageId } = payload;
+    // room:read handler
+    socket.on('room:read', async (payload, callback) => {
+      const { roomId } = payload;
+      const { userId, username } = socket.data;
 
-      if (!roomId || !clientId || !messageId) {
+      console.log(`[Room] room:read - User: ${username}, Room: ${roomId}`);
+
+      if (!roomId || !userId) {
         callback({ ok: false, error: 'Missing required fields' });
         return;
       }
 
-      // Record metrics
-      await recordTranslationOpen(roomId, messageId);
-
-      // Get updated metrics
-      const metrics = await getRoomMetrics(roomId);
-
-      // Broadcast metrics update (optional)
-      io.to(roomId).emit('room:metrics:update', metrics);
-
-      callback({ ok: true });
-    });
-
-    // room:metrics:get handler
-    socket.on('room:metrics:get', async (payload, callback) => {
-      const { roomId } = payload;
-
-      if (!roomId) {
-        callback({ ok: false, error: 'Missing roomId' });
+      const member = await isMember(roomId, userId);
+      if (!member) {
+        callback({ ok: false, error: 'Not a room member' });
         return;
       }
 
-      const metrics = await getRoomMetrics(roomId);
-      callback({ ok: true, metrics });
+      await markRoomRead(roomId, userId);
+      const updates = await getReadUpdates(roomId);
+      console.log(`[Room] Read updates:`, updates);
+      io.to(roomId).emit('message:readUpdate', { updates });
+      callback({ ok: true });
     });
 
-    // Handle disconnect
+    // disconnect handler
     socket.on('disconnect', async () => {
-      const { roomId, clientId } = socket.data;
-      if (roomId && clientId) {
-        await removeClientFromRoom(roomId, clientId);
-        console.log(`[Room] Client ${clientId} left room ${roomId}`);
-      }
       console.log(`[Socket] Client disconnected: ${socket.id}`);
+
+      const { sessionId } = socket.data;
+      if (sessionId) {
+        const currentCount = sessionConnections.get(sessionId) ?? 0;
+        const newCount = Math.max(0, currentCount - 1);
+        sessionConnections.set(sessionId, newCount);
+
+        if (newCount === 0) {
+          await setSessionActive(sessionId, false);
+          sessionConnections.delete(sessionId);
+        }
+      }
     });
   });
 
-  console.log('[Socket.io] Server initialized');
   return io;
-}
-
-/**
- * Translate message asynchronously
- */
-async function translateMessage(
-  io: SocketIOServer<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>,
-  message: Message
-): Promise<void> {
-  try {
-    const translatedText = await translateKoToEn(message.originalText);
-    const highlightSpan = selectHighlight(translatedText);
-
-    // Update message in store
-    await updateMessageTranslation(message.roomId, message.messageId, translatedText, highlightSpan);
-
-    // Notify clients
-    io.to(message.roomId).emit('message:translationReady', {
-      messageId: message.messageId,
-      translatedText,
-      highlightSpan,
-    });
-
-    console.log(`[Translation] Success for message ${message.messageId}`);
-  } catch (error) {
-    console.error(`[Translation] Error for message ${message.messageId}:`, error);
-
-    // Mark as error
-    await markTranslationError(message.roomId, message.messageId);
-
-    // Notify clients
-    io.to(message.roomId).emit('message:translationError', {
-      messageId: message.messageId,
-    });
-  }
-}
-
-/**
- * Rate limiting check
- */
-function checkRateLimit(clientId: string): boolean {
-  const now = Date.now();
-  const timestamps = rateLimitMap.get(clientId) || [];
-
-  // Filter timestamps within last second
-  const recentTimestamps = timestamps.filter(ts => now - ts < 1000);
-
-  if (recentTimestamps.length >= RATE_LIMIT_PER_SECOND) {
-    return false;
-  }
-
-  // Add current timestamp
-  recentTimestamps.push(now);
-  rateLimitMap.set(clientId, recentTimestamps);
-
-  // Cleanup old entries periodically
-  if (Math.random() < 0.01) {
-    cleanupRateLimitMap();
-  }
-
-  return true;
-}
-
-/**
- * Cleanup rate limit map
- */
-function cleanupRateLimitMap(): void {
-  const now = Date.now();
-  for (const [clientId, timestamps] of rateLimitMap.entries()) {
-    const recentTimestamps = timestamps.filter(ts => now - ts < 60000); // Keep last minute
-    if (recentTimestamps.length === 0) {
-      rateLimitMap.delete(clientId);
-    } else {
-      rateLimitMap.set(clientId, recentTimestamps);
-    }
-  }
 }

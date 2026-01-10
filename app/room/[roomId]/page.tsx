@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getSocket, getOrCreateClientId } from '@/lib/socket-client';
-import { Message } from '@/lib/types';
+import { getSocket } from '@/lib/socket-client';
+import { Message, Language } from '@/lib/types';
 import MessageList from '@/components/MessageList';
 import Composer from '@/components/Composer';
 
@@ -14,28 +14,46 @@ export default function RoomPage() {
   const router = useRouter();
   const roomId = params.roomId as string;
 
-  const [clientId] = useState(() => getOrCreateClientId());
-  const [username, setUsername] = useState('');
+  const [user, setUser] = useState<{ userId: string; username: string; learningLanguage: Language } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
-  const [metrics, setMetrics] = useState({ totalMessages: 0, uniqueOpened: 0, openRate: 0 });
+  const [roomInfo, setRoomInfo] = useState<{ roomType: 'direct' | 'group'; name: string | null } | null>(null);
 
-  // Check if username exists
+  // Check auth
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    const fetchMe = async () => {
+      const response = await fetch('/api/auth/me');
+      if (!response.ok) {
+        router.push('/');
+        return;
+      }
+      const data = await response.json();
+      if (data.ok) {
+        setUser(data.user);
+      } else {
+        router.push('/');
+      }
+    };
 
-    const savedUsername = sessionStorage.getItem('ci_messenger_username');
-    if (!savedUsername) {
-      router.push('/');
-      return;
-    }
-
-    setUsername(savedUsername);
+    fetchMe();
   }, [router]);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchRoom = async () => {
+      const response = await fetch(`/api/rooms/${roomId}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.ok) {
+        setRoomInfo(data.room);
+      }
+    };
+    fetchRoom();
+  }, [roomId, user]);
 
   // Initialize socket connection and join room
   useEffect(() => {
-    if (!username) return;
+    if (!user) return;
     const socket = getSocket();
 
     // Connection event handlers
@@ -44,9 +62,10 @@ export default function RoomPage() {
       setConnectionStatus('connected');
 
       // Join room
-      socket.emit('room:join', { roomId, clientId, username }, (response) => {
+      socket.emit('room:join', { roomId }, (response) => {
         if (response.ok) {
           console.log('[Room] Joined successfully');
+          socket.emit('room:read', { roomId }, () => {});
         } else {
           console.error('[Room] Join failed:', response.error);
           setConnectionStatus('error');
@@ -69,51 +88,52 @@ export default function RoomPage() {
       console.log('[Room] New message:', message);
       setMessages((prev) => {
         // Avoid duplicates
-        if (prev.some(m => m.messageId === message.messageId)) {
+        if (prev.some((m) => m.messageId === message.messageId)) {
           return prev;
         }
         return [...prev, message].sort((a, b) => a.createdAt - b.createdAt);
       });
+
+      if (message.senderUserId !== user.userId) {
+        socket.emit('room:read', { roomId }, () => {});
+      }
     };
 
-    const handleTranslationReady = (payload: {
+    const handleMessageHistory = (history: Message[]) => {
+      setMessages(history.sort((a, b) => a.createdAt - b.createdAt));
+    };
+
+    const handleTranslationsReady = (payload: {
       messageId: string;
-      translatedText: string;
-      highlightSpan: { start: number; end: number };
+      translations: Record<Language, string>;
     }) => {
-      console.log('[Room] Translation ready:', payload);
+      console.log('[Room] Translations ready:', payload);
       setMessages((prev) =>
         prev.map((msg) =>
           msg.messageId === payload.messageId
             ? {
                 ...msg,
-                translationStatus: 'ready' as const,
-                translatedText: payload.translatedText,
-                highlightSpan: payload.highlightSpan,
+                translations: {
+                  ...msg.translations,
+                  ...payload.translations,
+                },
               }
             : msg
         )
       );
     };
 
-    const handleTranslationError = (payload: { messageId: string }) => {
-      console.log('[Room] Translation error:', payload);
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.messageId === payload.messageId
-            ? { ...msg, translationStatus: 'error' as const }
-            : msg
-        )
-      );
-    };
-
-    const handleMetricsUpdate = (payload: {
-      totalMessages: number;
-      uniqueOpened: number;
-      openRate: number;
+    const handleReadUpdate = (payload: {
+      updates: Array<{ messageId: string; unreadCount: number }>;
     }) => {
-      console.log('[Room] Metrics update:', payload);
-      setMetrics(payload);
+      console.log('[Room] Received read update:', payload.updates);
+      const updatesMap = new Map(payload.updates.map((item) => [item.messageId, item.unreadCount]));
+      setMessages((prev) =>
+        prev.map((msg) => {
+          const update = updatesMap.get(msg.messageId);
+          return typeof update === 'number' ? { ...msg, unreadCount: update } : msg;
+        })
+      );
     };
 
     // Attach listeners
@@ -121,9 +141,9 @@ export default function RoomPage() {
     socket.on('disconnect', handleDisconnect);
     socket.on('connect_error', handleConnectError);
     socket.on('message:new', handleNewMessage);
-    socket.on('message:translationReady', handleTranslationReady);
-    socket.on('message:translationError', handleTranslationError);
-    socket.on('room:metrics:update', handleMetricsUpdate);
+    socket.on('message:history', handleMessageHistory);
+    socket.on('message:translationsReady', handleTranslationsReady);
+    socket.on('message:readUpdate', handleReadUpdate);
 
     // If already connected, join immediately
     if (socket.connected) {
@@ -136,18 +156,18 @@ export default function RoomPage() {
       socket.off('disconnect', handleDisconnect);
       socket.off('connect_error', handleConnectError);
       socket.off('message:new', handleNewMessage);
-      socket.off('message:translationReady', handleTranslationReady);
-      socket.off('message:translationError', handleTranslationError);
-      socket.off('room:metrics:update', handleMetricsUpdate);
+      socket.off('message:history', handleMessageHistory);
+      socket.off('message:translationsReady', handleTranslationsReady);
+      socket.off('message:readUpdate', handleReadUpdate);
     };
-  }, [roomId, clientId, username]);
+  }, [roomId, user]);
 
   // Send message handler
   const handleSendMessage = useCallback(
     (text: string) => {
       const socket = getSocket();
 
-      socket.emit('message:send', { roomId, clientId, username, originalText: text }, (response) => {
+      socket.emit('message:send', { roomId, originalText: text }, (response) => {
         if (response.ok) {
           console.log('[Room] Message sent:', response.message);
         } else {
@@ -156,44 +176,28 @@ export default function RoomPage() {
         }
       });
     },
-    [roomId, clientId]
+    [roomId]
   );
 
-  // Translation open handler
-  const handleTranslationOpen = useCallback(
-    (messageId: string) => {
-      const socket = getSocket();
-
-      socket.emit('translation:open', { roomId, clientId, messageId }, (response) => {
-        if (!response.ok) {
-          console.error('[Room] Translation open event failed:', response.error);
-        }
-      });
-    },
-    [roomId, clientId]
-  );
-
-  // Fetch metrics on mount
-  useEffect(() => {
-    const socket = getSocket();
-    if (socket.connected) {
-      socket.emit('room:metrics:get', { roomId }, (response) => {
-        if (response.ok) {
-          setMetrics(response.metrics);
-        }
-      });
-    }
-  }, [roomId]);
+  if (!user) {
+    return null;
+  }
 
   return (
     <div style={styles.container}>
       {/* Header */}
-      <div style={styles.header}>
-        <button onClick={() => router.push('/')} style={styles.backButton}>
+      <div style={styles.header} className="room-header">
+        <button onClick={() => router.push('/rooms')} style={styles.backButton}>
           ← Back
         </button>
         <div style={styles.headerContent}>
-          <h2 style={styles.roomTitle}>Room: {roomId}</h2>
+          <h2 style={styles.roomTitle}>
+            {!roomInfo
+              ? `Room ${roomId}`
+              : roomInfo.roomType === 'group'
+                ? roomInfo.name || 'Global Chat'
+                : 'Direct chat'}
+          </h2>
           <div style={styles.statusBadge}>
             {connectionStatus === 'connecting' && '🟡 Connecting...'}
             {connectionStatus === 'connected' && '🟢 Connected'}
@@ -203,25 +207,15 @@ export default function RoomPage() {
         </div>
       </div>
 
-      {/* Metrics */}
-      <div style={styles.metrics}>
-        <span>Total: {metrics.totalMessages}</span>
-        <span>Opened: {metrics.uniqueOpened}</span>
-        <span>Rate: {(metrics.openRate * 100).toFixed(1)}%</span>
-      </div>
-
       {/* Messages */}
       <MessageList
         messages={messages}
-        currentClientId={clientId}
-        onTranslationOpen={handleTranslationOpen}
+        currentUserId={user.userId}
+        userLearningLanguage={user.learningLanguage}
       />
 
       {/* Composer */}
-      <Composer
-        onSend={handleSendMessage}
-        disabled={connectionStatus !== 'connected'}
-      />
+      <Composer onSend={handleSendMessage} disabled={connectionStatus !== 'connected'} />
     </div>
   );
 }
@@ -231,20 +225,22 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     height: '100vh',
-    background: '#f5f5f5',
+    background: 'var(--tg-bg)',
   },
   header: {
-    background: 'white',
-    borderBottom: '1px solid #e0e0e0',
-    padding: '12px 16px',
+    background: 'var(--tg-panel)',
+    borderBottom: '1px solid var(--tg-border)',
+    padding: '14px 20px',
+    boxShadow: '0 10px 20px rgba(31, 42, 58, 0.05)',
   },
   backButton: {
     background: 'none',
     border: 'none',
-    color: '#007bff',
-    fontSize: '14px',
-    padding: '4px 8px',
+    color: 'var(--tg-accent)',
+    fontSize: '13px',
+    padding: '4px 6px',
     marginBottom: '8px',
+    cursor: 'pointer',
   },
   headerContent: {
     display: 'flex',
@@ -253,20 +249,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
   roomTitle: {
     fontSize: '18px',
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: '700',
+    color: 'var(--tg-text)',
+    margin: 0,
   },
   statusBadge: {
-    fontSize: '12px',
-    color: '#666',
-  },
-  metrics: {
-    background: '#fff9e6',
-    padding: '8px 16px',
-    display: 'flex',
-    gap: '16px',
-    fontSize: '12px',
-    color: '#666',
-    borderBottom: '1px solid #e0e0e0',
+    fontSize: '11px',
+    color: 'var(--tg-subtext)',
+    background: 'var(--tg-panel-soft)',
+    padding: '6px 10px',
+    borderRadius: '999px',
+    border: '1px solid var(--tg-border)',
   },
 };

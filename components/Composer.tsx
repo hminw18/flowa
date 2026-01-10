@@ -27,7 +27,7 @@ export default function Composer({ onSend, disabled = false }: ComposerProps) {
         type="text"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Type a message in Korean..."
+        placeholder="Type a message..."
         disabled={disabled}
         style={{
           ...styles.input,
@@ -43,7 +43,7 @@ export default function Composer({ onSend, disabled = false }: ComposerProps) {
           ...(disabled || !text.trim() ? styles.buttonDisabled : {}),
         }}
       >
-        Send
+        ➤
       </button>
     </form>
   );
@@ -52,38 +52,45 @@ export default function Composer({ onSend, disabled = false }: ComposerProps) {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     display: 'flex',
-    gap: '8px',
-    padding: '16px',
-    background: 'white',
-    borderTop: '1px solid #e0e0e0',
+    gap: '10px',
+    padding: '16px 18px 20px',
+    background: 'var(--tg-panel)',
+    borderTop: '1px solid var(--tg-border)',
+    boxShadow: '0 -8px 20px rgba(31, 42, 58, 0.04)',
   },
   input: {
     flex: 1,
-    padding: '12px 16px',
-    fontSize: '16px',
-    border: '2px solid #e0e0e0',
-    borderRadius: '24px',
+    padding: '12px 18px',
+    fontSize: '16px', // Prevent iOS zoom on input focus
+    border: '1px solid transparent',
+    borderRadius: '18px',
+    background: 'var(--tg-panel-soft)',
+    color: 'var(--tg-text)',
     outline: 'none',
-    transition: 'border-color 0.2s',
+    transition: 'border-color 0.2s, box-shadow 0.2s',
+    boxShadow: 'inset 0 0 0 1px rgba(42, 125, 246, 0.08)',
   },
   inputDisabled: {
-    background: '#f5f5f5',
+    background: '#eef2f8',
     cursor: 'not-allowed',
   },
   button: {
-    padding: '12px 24px',
-    fontSize: '16px',
-    fontWeight: '600',
+    width: '44px',
+    height: '44px',
+    fontSize: '18px',
+    fontWeight: '700',
     color: 'white',
-    background: '#4A90E2',
+    background: 'linear-gradient(135deg, var(--tg-accent), var(--tg-accent-strong))',
     border: 'none',
-    borderRadius: '24px',
-    transition: 'background 0.2s',
+    borderRadius: '50%',
+    transition: 'transform 0.2s, box-shadow 0.2s',
     whiteSpace: 'nowrap',
     cursor: 'pointer',
+    boxShadow: '0 10px 18px rgba(42, 125, 246, 0.25)',
   },
   buttonDisabled: {
-    background: '#cccccc',
+    background: '#c7d3e6',
     cursor: 'not-allowed',
+    boxShadow: 'none',
   },
 };

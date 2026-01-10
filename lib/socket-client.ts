@@ -22,6 +22,7 @@ export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> 
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 5,
+      withCredentials: true,
       transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
     });
 
@@ -42,6 +43,17 @@ export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> 
 }
 
 /**
+ * Reconnect socket (useful after login to refresh authentication)
+ */
+export function reconnectSocket(): void {
+  if (socket) {
+    console.log('[Socket] Reconnecting...');
+    socket.disconnect();
+    socket.connect();
+  }
+}
+
+/**
  * Disconnect socket
  */
 export function disconnectSocket(): void {
@@ -49,28 +61,4 @@ export function disconnectSocket(): void {
     socket.disconnect();
     socket = null;
   }
-}
-
-/**
- * Generate a unique client ID
- */
-export function generateClientId(): string {
-  return `client_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-}
-
-/**
- * Get or create client ID from sessionStorage
- */
-export function getOrCreateClientId(): string {
-  if (typeof window === 'undefined') return '';
-
-  const storageKey = 'ci_messenger_client_id';
-  let clientId = sessionStorage.getItem(storageKey);
-
-  if (!clientId) {
-    clientId = generateClientId();
-    sessionStorage.setItem(storageKey, clientId);
-  }
-
-  return clientId;
 }
