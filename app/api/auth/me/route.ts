@@ -18,6 +18,11 @@ export async function GET(request: Request) {
   await touchSession(sessionId);
   return NextResponse.json({
     ok: true,
-    user: { userId: session.userId, username: session.username },
+    user: {
+      userId: session.userId,
+      username: session.username,
+      nativeLanguage: session.nativeLanguage,
+      learningLanguage: session.learningLanguage,
+    },
   });
 }

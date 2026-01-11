@@ -53,10 +53,11 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     display: 'flex',
     gap: '10px',
-    padding: '16px 18px 20px',
-    background: 'var(--tg-panel)',
-    borderTop: '1px solid var(--tg-border)',
-    boxShadow: '0 -8px 20px rgba(31, 42, 58, 0.04)',
+    padding: '12px 14px calc(12px + env(safe-area-inset-bottom))',
+    background: 'var(--chat-bg)',
+    borderTop: 'none',
+    boxShadow: 'none',
+    flexShrink: 0,
   },
   input: {
     flex: 1,
@@ -64,7 +65,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '16px', // Prevent iOS zoom on input focus
     border: '1px solid transparent',
     borderRadius: '18px',
-    background: 'var(--tg-panel-soft)',
+    background: 'var(--tg-panel)',
     color: 'var(--tg-text)',
     outline: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s',

@@ -4,6 +4,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'CI Messenger - Demo',
   description: 'Multi-language chat demo',
+  themeColor: '#e8edf4',
 };
 
 export const viewport: Viewport = {

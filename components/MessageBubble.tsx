@@ -19,31 +19,14 @@ export default function MessageBubble({
 }: MessageBubbleProps) {
   const [showTranslation, setShowTranslation] = useState(false);
 
-  // Determine which translation to show
-  // If message is in user's learning language, show it in another available language
-  // Otherwise, show it in user's learning language
-  let translationLanguage: Language | null = null;
-  let translationText: string | null = null;
+  // Always show translation in user's learning language ONLY
+  // Only show if message is NOT already in user's learning language
+  const hasTranslation =
+    message.originalLanguage !== userLearningLanguage &&
+    message.translations &&
+    message.translations[userLearningLanguage];
 
-  if (message.translations) {
-    if (message.originalLanguage !== userLearningLanguage && message.translations[userLearningLanguage]) {
-      // Message is NOT in learning language, show learning language translation
-      translationLanguage = userLearningLanguage;
-      translationText = message.translations[userLearningLanguage];
-    } else {
-      // Message IS in learning language, find another translation
-      const availableLanguages: Language[] = ['ko', 'en', 'es'];
-      for (const lang of availableLanguages) {
-        if (lang !== message.originalLanguage && message.translations[lang]) {
-          translationLanguage = lang;
-          translationText = message.translations[lang];
-          break;
-        }
-      }
-    }
-  }
-
-  const hasTranslation = translationLanguage !== null && translationText !== null;
+  const translationText = hasTranslation ? message.translations?.[userLearningLanguage] : null;
 
   // Generate avatar color based on username
   const getAvatarColor = (username: string) => {
@@ -89,7 +72,7 @@ export default function MessageBubble({
             {hasTranslation && (
               <div style={styles.translationSectionOwn}>
                 <button onClick={() => setShowTranslation(!showTranslation)} style={styles.toggleButtonOwn}>
-                  {showTranslation ? 'Hide' : `View in ${LANGUAGE_NAMES[translationLanguage!]}`}
+                  {showTranslation ? 'Hide' : `View in ${LANGUAGE_NAMES[userLearningLanguage]}`}
                 </button>
 
                 {showTranslation && (
@@ -138,7 +121,7 @@ export default function MessageBubble({
           {hasTranslation && (
             <div style={styles.translationSectionOther}>
               <button onClick={() => setShowTranslation(!showTranslation)} style={styles.toggleButtonOther}>
-                {showTranslation ? 'Hide' : `View in ${LANGUAGE_NAMES[translationLanguage!]}`}
+                {showTranslation ? 'Hide' : `View in ${LANGUAGE_NAMES[userLearningLanguage]}`}
               </button>
 
               {showTranslation && (
@@ -196,11 +179,14 @@ const styles: Record<string, React.CSSProperties> = {
   bubbleOwn: {
     background: 'linear-gradient(135deg, var(--tg-bubble-own), var(--tg-bubble-own-dark))',
     color: 'white',
-    padding: '10px 14px',
+    padding: '8px 14px',
     borderRadius: '18px',
     borderBottomRightRadius: '6px',
     wordBreak: 'break-word',
     boxShadow: '0 8px 16px rgba(42, 125, 246, 0.25)',
+    display: 'inline-block',
+    width: 'fit-content',
+    maxWidth: '100%',
   },
 
   // Other user's message (left)
@@ -259,12 +245,15 @@ const styles: Record<string, React.CSSProperties> = {
   bubbleOther: {
     background: 'var(--tg-bubble-other)',
     color: 'var(--tg-text)',
-    padding: '10px 14px',
+    padding: '8px 14px',
     borderRadius: '18px',
     borderTopLeftRadius: '6px',
     boxShadow: '0 8px 16px rgba(31, 42, 58, 0.08)',
     wordBreak: 'break-word',
     border: '1px solid rgba(216, 225, 238, 0.8)',
+    display: 'inline-block',
+    width: 'fit-content',
+    maxWidth: '100%',
   },
 
   // Common
@@ -275,13 +264,13 @@ const styles: Record<string, React.CSSProperties> = {
 
   // Translation sections
   translationSectionOwn: {
-    marginTop: '8px',
-    paddingTop: '8px',
+    marginTop: '0',
+    paddingTop: '3px',
     borderTop: '1px solid rgba(255, 255, 255, 0.3)',
   },
   translationSectionOther: {
-    marginTop: '8px',
-    paddingTop: '8px',
+    marginTop: '0',
+    paddingTop: '3px',
     borderTop: '1px solid rgba(31, 42, 58, 0.08)',
   },
   toggleButtonOwn: {
@@ -290,7 +279,13 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'white',
     fontSize: '11px',
     opacity: 0.9,
-    padding: '2px 0',
+    padding: '1px 0',
+    margin: 0,
+    lineHeight: '1.1',
+    minHeight: 0,
+    height: 'auto',
+    display: 'flex',
+    alignItems: 'center',
     cursor: 'pointer',
     fontWeight: '500',
   },
@@ -299,7 +294,13 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     color: 'var(--tg-subtext)',
     fontSize: '11px',
-    padding: '2px 0',
+    padding: '1px 0',
+    margin: 0,
+    lineHeight: '1.1',
+    minHeight: 0,
+    height: 'auto',
+    display: 'flex',
+    alignItems: 'center',
     cursor: 'pointer',
     fontWeight: '600',
   },
@@ -308,12 +309,12 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: '1.4',
     opacity: 0.95,
     color: 'white',
-    marginTop: '6px',
+    marginTop: '2px',
   },
   translationTextOther: {
     fontSize: '13px',
     lineHeight: '1.4',
     color: 'var(--tg-subtext)',
-    marginTop: '6px',
+    marginTop: '2px',
   },
 };

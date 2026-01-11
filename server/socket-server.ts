@@ -13,15 +13,15 @@ import {
   SocketData,
   Message,
   Language,
+  GLOBAL_ROOM_ID,
 } from '../lib/types';
 import {
-  getRoomById,
   getRoomMessages,
-  isMember,
   addMessage,
   addTranslations,
   markRoomRead,
   getReadUpdates,
+  addUserToGlobalRoom,
 } from './room-store';
 import { getUserFromRequest } from './auth';
 import { setSessionActive } from './user-store';
@@ -132,26 +132,20 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
 
     // room:join handler
     socket.on('room:join', async (payload, callback) => {
-      const { roomId } = payload;
+      const { roomId: requestedRoomId } = payload;
       const { userId, username } = socket.data;
 
-      if (!roomId || !userId || !username) {
-        callback({ ok: false, error: 'Missing roomId or user context' });
+      if (!userId || !username) {
+        callback({ ok: false, error: 'Missing user context' });
         return;
       }
 
-      const room = await getRoomById(roomId);
-      if (!room) {
-        callback({ ok: false, error: 'Room not found' });
-        return;
+      const roomId = GLOBAL_ROOM_ID;
+      if (requestedRoomId && requestedRoomId !== roomId) {
+        console.warn(`[Room] Redirecting join to global room (requested ${requestedRoomId})`);
       }
 
-      const member = await isMember(roomId, userId);
-      if (!member) {
-        callback({ ok: false, error: 'Not a room member' });
-        return;
-      }
-
+      await addUserToGlobalRoom(userId);
       socket.join(roomId);
 
       // Send message history
@@ -169,15 +163,20 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
 
     // message:send handler
     socket.on('message:send', async (payload, callback) => {
-      const { roomId, originalText } = payload;
+      const { roomId: requestedRoomId, originalText } = payload;
       const { userId, username, nativeLanguage } = socket.data;
+      const roomId = GLOBAL_ROOM_ID;
 
       console.log(`[Socket] message:send - User: ${username}, Room: ${roomId}`);
 
       // Validation
-      if (!roomId || !userId || !username || !originalText || !nativeLanguage) {
+      if (!userId || !username || !originalText || !nativeLanguage) {
         callback({ ok: false, error: 'Missing required fields' });
         return;
+      }
+
+      if (requestedRoomId && requestedRoomId !== roomId) {
+        console.warn(`[Room] Redirecting send to global room (requested ${requestedRoomId})`);
       }
 
       if (originalText.trim().length === 0) {
@@ -190,11 +189,7 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
         return;
       }
 
-      const member = await isMember(roomId, userId);
-      if (!member) {
-        callback({ ok: false, error: 'Not a room member' });
-        return;
-      }
+      await addUserToGlobalRoom(userId);
 
       // Rate limiting
       if (!checkRateLimit(userId)) {
@@ -228,22 +223,22 @@ export function initSocketServer(httpServer: HTTPServer): SocketIOServer<
 
     // room:read handler
     socket.on('room:read', async (payload, callback) => {
-      const { roomId } = payload;
+      const { roomId: requestedRoomId } = payload;
       const { userId, username } = socket.data;
+      const roomId = GLOBAL_ROOM_ID;
 
       console.log(`[Room] room:read - User: ${username}, Room: ${roomId}`);
 
-      if (!roomId || !userId) {
+      if (!userId) {
         callback({ ok: false, error: 'Missing required fields' });
         return;
       }
 
-      const member = await isMember(roomId, userId);
-      if (!member) {
-        callback({ ok: false, error: 'Not a room member' });
-        return;
+      if (requestedRoomId && requestedRoomId !== roomId) {
+        console.warn(`[Room] Redirecting read to global room (requested ${requestedRoomId})`);
       }
 
+      await addUserToGlobalRoom(userId);
       await markRoomRead(roomId, userId);
       const updates = await getReadUpdates(roomId);
       console.log(`[Room] Read updates:`, updates);

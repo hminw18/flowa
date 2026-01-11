@@ -12,6 +12,7 @@ import { createServer } from 'http';
 import { parse } from 'url';
 import next from 'next';
 import { initSocketServer } from './server/socket-server';
+import { enforceGlobalRoomOnly } from './server/room-store';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = dev ? 'localhost' : '0.0.0.0';
@@ -20,7 +21,15 @@ const port = parseInt(process.env.PORT || '3000', 10);
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
-app.prepare().then(() => {
+app.prepare().then(async () => {
+  // Ensure only the global room exists on server start
+  try {
+    await enforceGlobalRoomOnly();
+    console.log('[Server] Global room ready');
+  } catch (error) {
+    console.error('[Server] Failed to enforce global room:', error);
+  }
+
   const httpServer = createServer(async (req, res) => {
     try {
       const parsedUrl = parse(req.url!, true);

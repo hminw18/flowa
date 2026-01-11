@@ -3,7 +3,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { Message, RoomSummary, Language } from '../lib/types';
+import { Message, RoomSummary, Language, GLOBAL_ROOM_ID, GLOBAL_ROOM_NAME } from '../lib/types';
 import { query } from './db';
 
 type DbMessageRow = {
@@ -273,24 +273,31 @@ export async function getReadUpdates(roomId: string): Promise<Array<{ messageId:
   }));
 }
 
-const GLOBAL_ROOM_ID = 'global';
-
-export async function getOrCreateGlobalRoom(): Promise<string> {
-  // Check if global room exists
-  const existing = await query<{ room_id: string }>(
-    'select room_id from rooms where room_id = $1',
-    [GLOBAL_ROOM_ID]
+export async function getUnreadCountForUser(roomId: string, userId: string): Promise<number> {
+  const result = await query<{ unread_count: number }>(
+    `select count(*)::int as unread_count
+     from messages m
+     where m.room_id = $1
+       and m.sender_user_id <> $2
+       and not exists (
+         select 1 from message_reads mr
+         where mr.message_id = m.message_id and mr.user_id = $2
+       )`,
+    [roomId, userId]
   );
 
-  if (existing.rows.length > 0) {
-    return GLOBAL_ROOM_ID;
-  }
+  return result.rows[0]?.unread_count ?? 0;
+}
 
-  // Create global room
+export async function getOrCreateGlobalRoom(): Promise<string> {
   await query(
     `insert into rooms (room_id, room_type, name, created_by)
-     values ($1, 'group', 'Global Chat', null)`,
-    [GLOBAL_ROOM_ID]
+     values ($1, 'group', $2, null)
+     on conflict (room_id) do update
+     set room_type = excluded.room_type,
+         name = excluded.name,
+         updated_at = now()`,
+    [GLOBAL_ROOM_ID, GLOBAL_ROOM_NAME]
   );
 
   return GLOBAL_ROOM_ID;
@@ -304,6 +311,11 @@ export async function addUserToGlobalRoom(userId: string): Promise<void> {
      on conflict (room_id, user_id) do nothing`,
     [roomId, userId]
   );
+}
+
+export async function enforceGlobalRoomOnly(): Promise<void> {
+  await getOrCreateGlobalRoom();
+  await query('delete from rooms where room_id <> $1', [GLOBAL_ROOM_ID]);
 }
 
 export async function getRoomsForUser(userId: string): Promise<RoomSummary[]> {

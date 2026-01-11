@@ -37,7 +37,7 @@ export default function MessageList({
 
   return (
     <div style={styles.container}>
-      <div style={styles.messageList}>
+      <div style={styles.messageList} className="message-list-scroll">
         {messages.map((message) => (
           <MessageBubble
             key={message.messageId}
@@ -58,17 +58,19 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
-    background: 'var(--tg-bg)',
-    backgroundImage:
-      'radial-gradient(circle at 18% 12%, rgba(42, 125, 246, 0.08), transparent 40%), radial-gradient(circle at 82% 0%, rgba(42, 125, 246, 0.06), transparent 45%)',
+    background: 'var(--chat-bg)',
+    backgroundImage: 'var(--chat-bg-image)',
+    position: 'relative',
   },
   messageList: {
     flex: 1,
     overflowY: 'auto',
+    overflowX: 'hidden',
     padding: '24px 0 20px 0',
     width: '100%',
     maxWidth: '1280px',
     margin: '0 auto',
+    WebkitOverflowScrolling: 'touch',
   },
   emptyState: {
     flex: 1,

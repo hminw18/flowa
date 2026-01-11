@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSocket } from '@/lib/socket-client';
-import { Message, Language } from '@/lib/types';
+import { Message, Language, GLOBAL_ROOM_ID, GLOBAL_ROOM_NAME } from '@/lib/types';
 import MessageList from '@/components/MessageList';
 import Composer from '@/components/Composer';
 
@@ -12,12 +12,12 @@ type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 export default function RoomPage() {
   const params = useParams();
   const router = useRouter();
-  const roomId = params.roomId as string;
+  const requestedRoomId = params.roomId as string;
+  const roomId = GLOBAL_ROOM_ID;
 
   const [user, setUser] = useState<{ userId: string; username: string; learningLanguage: Language } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
-  const [roomInfo, setRoomInfo] = useState<{ roomType: 'direct' | 'group'; name: string | null } | null>(null);
 
   // Check auth
   useEffect(() => {
@@ -39,17 +39,17 @@ export default function RoomPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!user) return;
-    const fetchRoom = async () => {
-      const response = await fetch(`/api/rooms/${roomId}`);
-      if (!response.ok) return;
-      const data = await response.json();
-      if (data.ok) {
-        setRoomInfo(data.room);
-      }
+    document.body.classList.add('room-page');
+    return () => {
+      document.body.classList.remove('room-page');
     };
-    fetchRoom();
-  }, [roomId, user]);
+  }, []);
+
+  useEffect(() => {
+    if (requestedRoomId && requestedRoomId !== GLOBAL_ROOM_ID) {
+      router.replace(`/room/${GLOBAL_ROOM_ID}`);
+    }
+  }, [requestedRoomId, router]);
 
   // Initialize socket connection and join room
   useEffect(() => {
@@ -183,27 +183,29 @@ export default function RoomPage() {
     return null;
   }
 
+  const statusColor =
+    connectionStatus === 'connected'
+      ? '#34a853'
+      : connectionStatus === 'disconnected' || connectionStatus === 'error'
+        ? '#ea4335'
+        : '#f4b400';
+  const statusShadow =
+    connectionStatus === 'connected'
+      ? '0 0 0 4px rgba(52, 168, 83, 0.15)'
+      : connectionStatus === 'disconnected' || connectionStatus === 'error'
+        ? '0 0 0 4px rgba(234, 67, 53, 0.18)'
+        : '0 0 0 4px rgba(244, 180, 0, 0.18)';
+
   return (
-    <div style={styles.container}>
+    <div style={styles.container} className="room-container">
       {/* Header */}
       <div style={styles.header} className="room-header">
-        <button onClick={() => router.push('/rooms')} style={styles.backButton}>
-          ← Back
-        </button>
         <div style={styles.headerContent}>
-          <h2 style={styles.roomTitle}>
-            {!roomInfo
-              ? `Room ${roomId}`
-              : roomInfo.roomType === 'group'
-                ? roomInfo.name || 'Global Chat'
-                : 'Direct chat'}
-          </h2>
-          <div style={styles.statusBadge}>
-            {connectionStatus === 'connecting' && '🟡 Connecting...'}
-            {connectionStatus === 'connected' && '🟢 Connected'}
-            {connectionStatus === 'disconnected' && '🔴 Disconnected'}
-            {connectionStatus === 'error' && '🔴 Error'}
-          </div>
+          <button onClick={() => router.push('/rooms')} style={styles.backButton}>
+            ←
+          </button>
+          <h2 style={styles.roomTitle}>{GLOBAL_ROOM_NAME}</h2>
+          <div style={{ ...styles.statusDot, background: statusColor, boxShadow: statusShadow }} />
         </div>
       </div>
 
@@ -224,41 +226,49 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     display: 'flex',
     flexDirection: 'column',
-    height: '100vh',
-    background: 'var(--tg-bg)',
+    height: '100dvh',
+    background: 'var(--chat-bg)',
+    backgroundImage: 'var(--chat-bg-image)',
+    overflow: 'hidden',
+    position: 'relative',
   },
   header: {
-    background: 'var(--tg-panel)',
-    borderBottom: '1px solid var(--tg-border)',
-    padding: '14px 20px',
-    boxShadow: '0 10px 20px rgba(31, 42, 58, 0.05)',
-  },
-  backButton: {
-    background: 'none',
-    border: 'none',
-    color: 'var(--tg-accent)',
-    fontSize: '13px',
-    padding: '4px 6px',
-    marginBottom: '8px',
-    cursor: 'pointer',
+    background: 'var(--chat-bg)',
+    backgroundImage: 'var(--chat-bg-image)',
+    borderBottom: 'none',
+    padding: '4px 10px',
+    paddingTop: 'calc(4px + env(safe-area-inset-top))',
+    boxShadow: 'none',
+    flexShrink: 0,
+    zIndex: 10,
+    backdropFilter: 'none',
+    WebkitBackdropFilter: 'none',
   },
   headerContent: {
-    display: 'flex',
-    justifyContent: 'space-between',
+    display: 'grid',
+    gridTemplateColumns: '1fr auto 1fr',
     alignItems: 'center',
+  },
+  backButton: {
+    justifySelf: 'start',
+    background: 'none',
+    border: 'none',
+    color: 'var(--tg-text)',
+    fontSize: '18px',
+    cursor: 'pointer',
+    padding: '4px 6px',
   },
   roomTitle: {
     fontSize: '18px',
     fontWeight: '700',
     color: 'var(--tg-text)',
     margin: 0,
+    textAlign: 'center',
   },
-  statusBadge: {
-    fontSize: '11px',
-    color: 'var(--tg-subtext)',
-    background: 'var(--tg-panel-soft)',
-    padding: '6px 10px',
+  statusDot: {
+    width: '10px',
+    height: '10px',
     borderRadius: '999px',
-    border: '1px solid var(--tg-border)',
+    justifySelf: 'end',
   },
 };

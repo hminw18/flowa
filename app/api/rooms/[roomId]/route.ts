@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSessionIdFromCookieHeader } from '@/server/auth';
 import { getSession } from '@/server/user-store';
-import { getRoomById, isMember } from '@/server/room-store';
+import { addUserToGlobalRoom } from '@/server/room-store';
+import { GLOBAL_ROOM_ID, GLOBAL_ROOM_NAME } from '@/lib/types';
 
 export const runtime = 'nodejs';
 
@@ -19,18 +20,14 @@ export async function GET(
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 
-  const room = await getRoomById(params.roomId);
-  if (!room) {
+  if (params.roomId !== GLOBAL_ROOM_ID) {
     return NextResponse.json({ ok: false, error: 'Room not found' }, { status: 404 });
   }
 
-  const member = await isMember(params.roomId, session.userId);
-  if (!member) {
-    return NextResponse.json({ ok: false, error: 'Not a room member' }, { status: 403 });
-  }
+  await addUserToGlobalRoom(session.userId);
 
   return NextResponse.json({
     ok: true,
-    room: { roomId: room.roomId, roomType: room.roomType, name: room.name },
+    room: { roomId: GLOBAL_ROOM_ID, roomType: 'group', name: GLOBAL_ROOM_NAME },
   });
 }

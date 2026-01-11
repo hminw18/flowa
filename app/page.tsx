@@ -100,8 +100,8 @@ export default function HomePage() {
   return (
     <div style={styles.container}>
       <div style={styles.card} className="login-card">
-        <h1 style={styles.title}>Language Exchange Chat</h1>
-        <p style={styles.subtitle}>Connect and learn together</p>
+        <h1 style={styles.title}>Langtalk Demo</h1>
+        <p style={styles.subtitle}>Language learning starts with your authentic conversations!</p>
 
         <div style={styles.form}>
           <label style={styles.label}>Your Name</label>

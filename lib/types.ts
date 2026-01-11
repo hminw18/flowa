@@ -75,3 +75,4 @@ export interface SocketData {
 
 // Global room ID
 export const GLOBAL_ROOM_ID = 'global';
+export const GLOBAL_ROOM_NAME = 'Langchat Demo';
