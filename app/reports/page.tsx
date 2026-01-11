@@ -26,6 +26,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     const check = async () => {
@@ -119,24 +120,20 @@ export default function ReportsPage() {
 
         <section style={styles.section}>
           <div style={styles.sectionHeader}>
-            <div>
-              <h2 style={styles.sectionTitle}>Your saved expressions</h2>
-              <p style={styles.sectionSubtitle}>Only what you saved from chat.</p>
-            </div>
           </div>
           {loading && <div style={styles.placeholder}>Loading...</div>}
           {!loading && saved.length === 0 && (
             <div style={styles.placeholder}>No saved expressions yet.</div>
           )}
           {!loading && saved.length > 0 && (
-            <div style={styles.list}>
+            <div style={styles.listPlain}>
               {saved.map((item) => (
-                <div key={item.messageId} style={styles.card}>
-                  <div style={styles.cardText}>{item.originalText}</div>
+                <div key={item.messageId} style={styles.row}>
+                  <div style={styles.rowMain}>{item.originalText}</div>
                   {item.translatedText && (
-                    <div style={styles.cardTranslation}>{item.translatedText}</div>
+                    <div style={styles.rowSub}>{item.translatedText}</div>
                   )}
-                  <div style={styles.cardMeta}>
+                  <div style={styles.rowMeta}>
                     {item.targetLanguage.toUpperCase()} · {new Date(item.createdAt).toLocaleString()}
                   </div>
                 </div>
@@ -149,36 +146,45 @@ export default function ReportsPage() {
           <div style={styles.sectionHeader}>
             <div>
               <h2 style={styles.sectionTitle}>Today’s key expressions</h2>
-              <p style={styles.sectionSubtitle}>Pick and save up to 3 from today’s chat.</p>
             </div>
             <button
-              onClick={handleGenerateSuggestions}
-              style={styles.button}
-              disabled={suggestLoading}
+              onClick={() => setShowSuggestions((prev) => !prev)}
+              style={styles.ghostButton}
             >
-              {suggestLoading ? 'Generating...' : 'Generate 3'}
+              {showSuggestions ? 'Hide' : 'Show'}
             </button>
           </div>
-          {suggestionItems.length === 0 && (
-            <div style={styles.placeholder}>No suggestions yet. Generate to see 3 picks.</div>
-          )}
-          {suggestionItems.length > 0 && (
-            <div style={styles.list}>
-              {suggestionItems.map((item) => (
-                <div key={item.messageId} style={styles.card}>
-                  <div style={styles.cardText}>{item.text}</div>
-                  {item.senderUsername && (
-                    <div style={styles.cardMeta}>From {item.senderUsername}</div>
-                  )}
-                  <button
-                    style={item.saved ? styles.buttonSaved : styles.button}
-                    onClick={() => handleSaveSuggestion(item.messageId)}
-                    disabled={item.saved}
-                  >
-                    {item.saved ? 'Saved' : 'Save'}
-                  </button>
+          {showSuggestions && (
+            <div style={styles.suggestionPanel}>
+              <button
+                onClick={handleGenerateSuggestions}
+                style={styles.button}
+                disabled={suggestLoading}
+              >
+                {suggestLoading ? 'Generating...' : 'Generate 3'}
+              </button>
+              {suggestionItems.length === 0 && (
+                <div style={styles.placeholder}>No suggestions yet. Generate to see 3 picks.</div>
+              )}
+              {suggestionItems.length > 0 && (
+                <div style={styles.listPlain}>
+                  {suggestionItems.map((item) => (
+                    <div key={item.messageId} style={styles.row}>
+                      <div style={styles.rowMain}>{item.text}</div>
+                      {item.senderUsername && (
+                        <div style={styles.rowMeta}>From {item.senderUsername}</div>
+                      )}
+                      <button
+                        style={item.saved ? styles.buttonSaved : styles.button}
+                        onClick={() => handleSaveSuggestion(item.messageId)}
+                        disabled={item.saved}
+                      >
+                        {item.saved ? 'Saved' : 'Save'}
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )}
         </section>
@@ -199,7 +205,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '14px 20px',
   },
   title: {
-    fontSize: '20px',
+    fontSize: '22px',
     fontWeight: '700',
     margin: 0,
   },
@@ -236,24 +242,27 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: '10px',
   },
-  card: {
-    background: 'var(--tg-panel)',
-    border: '1px solid var(--tg-border)',
-    borderRadius: '12px',
-    padding: '12px',
+  listPlain: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '6px',
+    gap: '8px',
   },
-  cardText: {
+  row: {
+    padding: '8px 2px',
+    borderBottom: '1px solid var(--tg-border)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+  },
+  rowMain: {
     fontSize: '14px',
     color: 'var(--tg-text)',
   },
-  cardTranslation: {
+  rowSub: {
     fontSize: '13px',
     color: 'var(--tg-subtext)',
   },
-  cardMeta: {
+  rowMeta: {
     fontSize: '11px',
     color: 'var(--tg-subtext)',
   },
@@ -276,6 +285,16 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     whiteSpace: 'nowrap',
   },
+  ghostButton: {
+    padding: '6px 10px',
+    borderRadius: '10px',
+    border: '1px solid rgba(216, 225, 238, 0.9)',
+    background: 'transparent',
+    color: 'var(--tg-subtext)',
+    fontWeight: '600',
+    fontSize: '11px',
+    cursor: 'pointer',
+  },
   buttonSaved: {
     padding: '8px 12px',
     borderRadius: '10px',
@@ -286,6 +305,15 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '12px',
     cursor: 'not-allowed',
     whiteSpace: 'nowrap',
+  },
+  suggestionPanel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    padding: '10px 12px',
+    borderRadius: '12px',
+    border: '1px dashed var(--tg-border)',
+    background: 'var(--tg-panel-soft)',
   },
   error: {
     background: 'rgba(214, 69, 69, 0.08)',

@@ -104,7 +104,11 @@ export default function QuizPage() {
       <main style={styles.content}>
         {error && <div style={styles.error}>{error}</div>}
         {sortedQuizzes.length === 0 && !error && (
-          <div style={styles.placeholder}>Generate your first quiz for today.</div>
+          <div style={styles.placeholder}>
+            {serverToday
+              ? `No quiz for today yet. Generate to create ${formatTitle(serverToday)}.`
+              : 'Generate your first quiz for today.'}
+          </div>
         )}
         {sortedQuizzes.length > 0 && (
           <div style={styles.list}>
@@ -146,6 +150,7 @@ export default function QuizPage() {
         )}
         {!loading &&
           serverToday &&
+          sortedQuizzes.length > 0 &&
           sortedQuizzes.every((quiz) => quiz.quizDate !== serverToday) && (
             <div style={styles.placeholder}>
               No quiz for today yet. Generate to create {formatTitle(serverToday)}.
@@ -172,7 +177,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '12px',
   },
   title: {
-    fontSize: '20px',
+    fontSize: '22px',
     fontWeight: '700',
     margin: 0,
   },

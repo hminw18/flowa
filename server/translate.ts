@@ -7,7 +7,6 @@ import OpenAI from 'openai';
 import { Language } from '../lib/types';
 
 const MAX_TEXT_LENGTH = 500;
-const TIMEOUT_MS = 15000;
 
 let openai: OpenAI | null = null;
 let configLogged = false;
@@ -54,7 +53,12 @@ function getOpenAIClient(): OpenAI | null {
  */
 export async function translateToAllLanguages(
   text: string,
-  sourceLanguage: Language
+  sourceLanguage: Language,
+  context?: Array<{
+    senderUsername: string;
+    originalText: string;
+    originalLanguage: Language;
+  }>
 ): Promise<Record<Language, string>> {
   if (text.length > MAX_TEXT_LENGTH) {
     throw new Error(`Text too long (max ${MAX_TEXT_LENGTH} characters)`);
@@ -86,7 +90,7 @@ export async function translateToAllLanguages(
   // Translate to all target languages in parallel
   const translationPromises = targetLanguages.map(async (targetLang) => {
     try {
-      const translated = await translateWithOpenAI(client, text, sourceLanguage, targetLang);
+      const translated = await translateWithOpenAI(client, text, sourceLanguage, targetLang, context);
       return { targetLang, translated };
     } catch (error) {
       console.error(`[Translation] Failed ${sourceLanguage}->${targetLang}:`, error);
@@ -111,7 +115,12 @@ async function translateWithOpenAI(
   client: OpenAI,
   text: string,
   sourceLang: Language,
-  targetLang: Language
+  targetLang: Language,
+  context?: Array<{
+    senderUsername: string;
+    originalText: string;
+    originalLanguage: Language;
+  }>
 ): Promise<string> {
   const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
   const sourceName = LANGUAGE_FULL_NAMES[sourceLang];
@@ -121,9 +130,15 @@ async function translateWithOpenAI(
   console.log(`[Translation] ${sourceLang}->${targetLang}: "${normalized.substring(0, 50)}..."`);
 
   const runTranslation = async () => {
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Translation timeout')), TIMEOUT_MS);
-    });
+    const contextLines =
+      context && context.length > 0
+        ? context
+            .map((msg) => `${msg.senderUsername} (${msg.originalLanguage}): ${msg.originalText}`)
+            .join('\n')
+        : '';
+    const userContent = contextLines
+      ? `Context (previous 3 turns, for meaning only):\n${contextLines}\n\nTranslate ONLY this message:\n${normalized}`
+      : normalized;
 
     const translationPromise = client.chat.completions.create({
       model: OPENAI_MODEL,
@@ -138,14 +153,14 @@ Rules:
         },
         {
           role: 'user',
-          content: normalized,
+          content: userContent,
         },
       ],
       temperature: 1,
       reasoning_effort: 'medium',
     });
 
-    const completion = await Promise.race([translationPromise, timeoutPromise]);
+    const completion = await translationPromise;
     const choice = completion.choices[0];
     const translatedText = choice?.message?.content?.trim();
 

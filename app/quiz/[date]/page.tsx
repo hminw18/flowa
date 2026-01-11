@@ -435,7 +435,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   title: {
     margin: 0,
-    fontSize: '18px',
+    fontSize: '22px',
     fontWeight: '700',
     textAlign: 'center',
   },

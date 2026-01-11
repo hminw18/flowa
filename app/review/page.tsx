@@ -283,7 +283,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '12px',
   },
   title: {
-    fontSize: '20px',
+    fontSize: '22px',
     fontWeight: '700',
     margin: 0,
   },

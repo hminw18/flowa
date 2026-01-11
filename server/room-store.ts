@@ -70,6 +70,42 @@ export async function getRoomMessages(roomId: string): Promise<Message[]> {
   }));
 }
 
+export async function getRecentRoomMessages(roomId: string, limit: number): Promise<Message[]> {
+  const result = await query<{
+    message_id: string;
+    room_id: string;
+    sender_user_id: string;
+    sender_username: string;
+    original_text: string;
+    original_language: Language;
+    created_at_ms: number;
+  }>(
+    `select
+       m.message_id,
+       m.room_id,
+       m.sender_user_id,
+       m.sender_username,
+       m.original_text,
+       m.original_language,
+       (extract(epoch from m.created_at) * 1000)::bigint as created_at_ms
+     from messages m
+     where m.room_id = $1
+     order by m.created_at desc
+     limit $2`,
+    [roomId, limit]
+  );
+
+  return result.rows.map((row) => ({
+    messageId: row.message_id,
+    roomId: row.room_id,
+    senderUserId: row.sender_user_id,
+    senderUsername: row.sender_username,
+    originalText: row.original_text,
+    originalLanguage: row.original_language,
+    createdAt: Number(row.created_at_ms),
+  }));
+}
+
 export async function getRoomById(
   roomId: string
 ): Promise<{ roomId: string; roomType: 'direct' | 'group'; name: string | null } | null> {

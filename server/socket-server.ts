@@ -22,6 +22,7 @@ import {
   markRoomRead,
   getReadUpdates,
   addUserToGlobalRoom,
+  getRecentRoomMessages,
 } from './room-store';
 import { getUserFromRequest } from './auth';
 import { setSessionActive } from './user-store';
@@ -60,7 +61,22 @@ async function translateMessage(io: SocketIOServer, message: Message): Promise<v
   try {
     console.log(`[Translation] Starting for message ${message.messageId}`);
 
-    const translations = await translateToAllLanguages(message.originalText, message.originalLanguage);
+    const recent = await getRecentRoomMessages(message.roomId, 4);
+    const context = recent
+      .filter((msg) => msg.messageId !== message.messageId)
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(-3)
+      .map((msg) => ({
+        senderUsername: msg.senderUsername,
+        originalText: msg.originalText,
+        originalLanguage: msg.originalLanguage,
+      }));
+
+    const translations = await translateToAllLanguages(
+      message.originalText,
+      message.originalLanguage,
+      context
+    );
 
     // Save translations to database
     await addTranslations(message.messageId, translations);
