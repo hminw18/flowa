@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RoomSummary } from '@/lib/types';
 import { GLOBAL_ROOM_NAME } from '@/lib/types';
+import BottomNav from '@/components/BottomNav';
 
 type User = { userId: string; username: string };
 
@@ -96,6 +97,7 @@ export default function RoomsPage() {
           })}
         </div>
       </div>
+      <BottomNav />
     </div>
   );
 }
@@ -105,6 +107,7 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100vh',
     background: 'var(--tg-bg)',
     color: 'var(--tg-text)',
+    paddingBottom: '72px',
   },
   header: {
     padding: '14px 20px',

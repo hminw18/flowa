@@ -77,3 +77,41 @@ create table if not exists translation_opens (
   opened_at timestamptz not null default now(),
   primary key (room_id, message_id, user_id)
 );
+
+create table if not exists saved_expressions (
+  saved_id text primary key,
+  user_id text not null references users(user_id) on delete cascade,
+  message_id text not null references messages(message_id) on delete cascade,
+  original_text text not null,
+  translated_text text,
+  target_language text not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, message_id)
+);
+
+create index if not exists saved_expressions_user_idx on saved_expressions (user_id);
+
+create table if not exists roleplay_reviews (
+  review_id text primary key,
+  user_id text not null references users(user_id) on delete cascade,
+  review_date date not null,
+  sessions jsonb not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, review_date)
+);
+
+create index if not exists roleplay_reviews_user_date_idx on roleplay_reviews (user_id, review_date);
+
+create table if not exists daily_quizzes (
+  quiz_id text primary key,
+  user_id text not null references users(user_id) on delete cascade,
+  quiz_date date not null,
+  items jsonb not null,
+  responses jsonb,
+  score int,
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (user_id, quiz_date)
+);
+
+create index if not exists daily_quizzes_user_date_idx on daily_quizzes (user_id, quiz_date);

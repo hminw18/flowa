@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSocket } from '@/lib/socket-client';
 import { Message, Language, GLOBAL_ROOM_ID, GLOBAL_ROOM_NAME } from '@/lib/types';
@@ -18,6 +18,7 @@ export default function RoomPage() {
   const [user, setUser] = useState<{ userId: string; username: string; learningLanguage: Language } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
+  const [savedMessageIds, setSavedMessageIds] = useState<string[]>([]);
 
   // Check auth
   useEffect(() => {
@@ -50,6 +51,19 @@ export default function RoomPage() {
       router.replace(`/room/${GLOBAL_ROOM_ID}`);
     }
   }, [requestedRoomId, router]);
+
+  useEffect(() => {
+    if (!user) return;
+    const loadSaved = async () => {
+      const res = await fetch('/api/saved');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.savedMessageIds)) {
+        setSavedMessageIds(data.savedMessageIds);
+      }
+    };
+    loadSaved();
+  }, [user]);
 
   // Initialize socket connection and join room
   useEffect(() => {
@@ -179,6 +193,36 @@ export default function RoomPage() {
     [roomId]
   );
 
+  const handleToggleSave = useCallback(async (messageId: string, nextSaved: boolean) => {
+    setSavedMessageIds((prev) => {
+      const set = new Set(prev);
+      if (nextSaved) {
+        set.add(messageId);
+      } else {
+        set.delete(messageId);
+      }
+      return Array.from(set);
+    });
+
+    const res = await fetch('/api/saved', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageId, action: nextSaved ? 'save' : 'unsave' }),
+    });
+
+    if (!res.ok) {
+      const rollback = await fetch('/api/saved');
+      if (rollback.ok) {
+        const data = await rollback.json();
+        if (data.ok && Array.isArray(data.savedMessageIds)) {
+          setSavedMessageIds(data.savedMessageIds);
+        }
+      }
+    }
+  }, []);
+
+  const savedSet = useMemo(() => new Set(savedMessageIds), [savedMessageIds]);
+
   if (!user) {
     return null;
   }
@@ -214,6 +258,8 @@ export default function RoomPage() {
         messages={messages}
         currentUserId={user.userId}
         userLearningLanguage={user.learningLanguage}
+        savedMessageIds={savedSet}
+        onToggleSave={handleToggleSave}
       />
 
       {/* Composer */}

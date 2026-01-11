@@ -25,7 +25,7 @@ function getPool(): Pool {
 
 export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
-  params?: Array<string | number | boolean | null>
+  params?: Array<string | number | boolean | null | string[] | number[]>
 ) {
   const result = await getPool().query<T>(text, params);
   return result;

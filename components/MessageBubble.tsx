@@ -4,20 +4,68 @@
  */
 
 import { Message, Language, LANGUAGE_NAMES } from '@/lib/types';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 
 interface MessageBubbleProps {
   message: Message;
   isOwn: boolean;
   userLearningLanguage: Language;
+  isSaved: boolean;
+  onToggleSave: (messageId: string, nextSaved: boolean) => void;
+  enableSaveSwipe?: boolean;
+  highlight?: boolean;
+  onSelect?: (messageId: string) => void;
 }
 
 export default function MessageBubble({
   message,
   isOwn,
   userLearningLanguage,
+  isSaved,
+  onToggleSave,
+  enableSaveSwipe = true,
+  highlight = false,
+  onSelect,
 }: MessageBubbleProps) {
   const [showTranslation, setShowTranslation] = useState(false);
+  const [offsetX, setOffsetX] = useState(0);
+  const [isOpen, setIsOpen] = useState(false);
+  const startXRef = useRef<number | null>(null);
+  const startOffsetRef = useRef(0);
+  const maxReveal = 72;
+  const direction = isOwn ? -1 : 1;
+  const revealProgress = Math.min(1, Math.abs(offsetX) / maxReveal);
+  const actionVisible = enableSaveSwipe && (isOpen || revealProgress > 0.05);
+  const showSavedTag = enableSaveSwipe && isSaved;
+  const feedback = message.feedback?.trim();
+  const suggestion = message.suggestion?.trim();
+  const feedbackStatus = message.feedbackStatus;
+  const showFeedback = isOwn && (!!feedback || !!suggestion);
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    startXRef.current = event.clientX;
+    startOffsetRef.current = isOpen ? direction * maxReveal : 0;
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (startXRef.current === null) return;
+    const delta = event.clientX - startXRef.current;
+    let next = startOffsetRef.current + delta;
+    if (direction > 0) {
+      next = Math.max(0, Math.min(maxReveal, next));
+    } else {
+      next = Math.min(0, Math.max(-maxReveal, next));
+    }
+    setOffsetX(next);
+  };
+
+  const handlePointerUp = () => {
+    if (startXRef.current === null) return;
+    const shouldOpen = Math.abs(offsetX) > maxReveal * 0.5;
+    setIsOpen(shouldOpen);
+    setOffsetX(shouldOpen ? direction * maxReveal : 0);
+    startXRef.current = null;
+  };
 
   // Always show translation in user's learning language ONLY
   // Only show if message is NOT already in user's learning language
@@ -53,35 +101,94 @@ export default function MessageBubble({
     // Own message (right side)
     return (
       <div style={styles.containerOwn} className="message-bubble-container">
-        <div style={styles.messageGroupOwn}>
-          <div style={styles.metaOwn}>
-            <span style={styles.timeOwn}>
-              {new Date(message.createdAt).toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
-            </span>
-            {typeof message.unreadCount === 'number' && message.unreadCount > 0 && (
-              <span style={styles.unreadBadge}>{message.unreadCount}</span>
-            )}
-          </div>
-          <div style={styles.bubbleOwn}>
-            <div style={styles.messageText}>{message.originalText}</div>
+        <div style={{ ...styles.swipeWrap, ...styles.swipeWrapOwn }}>
+          {enableSaveSwipe && (
+            <div
+              style={{
+                ...styles.actionAreaOwn,
+                opacity: actionVisible ? 1 : 0,
+                pointerEvents: actionVisible ? 'auto' : 'none',
+              }}
+            >
+              <button
+                type="button"
+                style={styles.actionButton}
+                onClick={() => {
+                  onToggleSave(message.messageId, !isSaved);
+                  setIsOpen(false);
+                  setOffsetX(0);
+                }}
+              >
+                {isSaved ? 'Unsave' : 'Save'}
+              </button>
+            </div>
+          )}
+          <div
+            style={{
+              ...styles.messageGroupOwn,
+              transform: enableSaveSwipe ? `translateX(${offsetX}px)` : 'translateX(0)',
+            }}
+            onPointerDown={enableSaveSwipe ? handlePointerDown : undefined}
+            onPointerMove={enableSaveSwipe ? handlePointerMove : undefined}
+            onPointerUp={enableSaveSwipe ? handlePointerUp : undefined}
+            onPointerCancel={enableSaveSwipe ? handlePointerUp : undefined}
+          >
+            <div style={styles.metaOwn}>
+              <span style={styles.timeOwn}>
+                {new Date(message.createdAt).toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+              {showSavedTag && <span style={styles.savedTag}>Saved</span>}
+              {typeof message.unreadCount === 'number' && message.unreadCount > 0 && (
+                <span style={styles.unreadBadge}>{message.unreadCount}</span>
+              )}
+            </div>
+            <div style={styles.bubbleStackOwn}>
+              <div
+                style={{
+                  ...styles.bubbleOwn,
+                  ...(highlight ? styles.bubbleHighlight : {}),
+                }}
+                onClick={onSelect ? () => onSelect(message.messageId) : undefined}
+              >
+                <div style={styles.messageText}>{message.originalText}</div>
 
-            {/* Translation toggle */}
-            {hasTranslation && (
-              <div style={styles.translationSectionOwn}>
-                <button onClick={() => setShowTranslation(!showTranslation)} style={styles.toggleButtonOwn}>
-                  {showTranslation ? 'Hide' : `View in ${LANGUAGE_NAMES[userLearningLanguage]}`}
-                </button>
+                {/* Translation toggle */}
+                {hasTranslation && (
+                  <div style={styles.translationSectionOwn}>
+                    <button onClick={() => setShowTranslation(!showTranslation)} style={styles.toggleButtonOwn}>
+                      {showTranslation ? 'Hide' : `View in ${LANGUAGE_NAMES[userLearningLanguage]}`}
+                    </button>
 
-                {showTranslation && (
-                  <div style={styles.translationTextOwn}>
-                    {translationText}
+                    {showTranslation && (
+                      <div style={styles.translationTextOwn}>{translationText}</div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
+              {showFeedback && (
+                <div style={styles.feedbackWrapOwn}>
+                  {feedback && (
+                    <div
+                      style={
+                        feedbackStatus === 'fail'
+                          ? styles.feedbackTextFail
+                          : styles.feedbackTextPass
+                      }
+                    >
+                      {feedback}
+                    </div>
+                  )}
+                  {suggestion && (
+                    <div style={styles.suggestionText}>
+                      More natural: {suggestion}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -92,45 +199,84 @@ export default function MessageBubble({
   return (
     <div style={styles.containerOther} className="message-bubble-container">
       {/* Avatar */}
-      <div style={{
-        ...styles.avatar,
-        background: getAvatarColor(message.senderUsername),
-      }}>
+      <div
+        style={{
+          ...styles.avatar,
+          background: getAvatarColor(message.senderUsername),
+        }}
+      >
         {getInitials(message.senderUsername)}
       </div>
 
       {/* Message content */}
-      <div style={styles.messageGroupOther}>
-        <div style={styles.usernameRow}>
-          <span style={styles.username}>{message.senderUsername}</span>
-          <span style={styles.timeOther}>
-            {new Date(message.createdAt).toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </span>
-          {typeof message.unreadCount === 'number' && message.unreadCount > 0 && (
-            <span style={styles.unreadBadgeOther}>{message.unreadCount}</span>
-          )}
-        </div>
+      <div style={{ ...styles.swipeWrap, ...styles.swipeWrapOther }}>
+        {enableSaveSwipe && (
+          <div
+            style={{
+              ...styles.actionAreaOther,
+              opacity: actionVisible ? 1 : 0,
+              pointerEvents: actionVisible ? 'auto' : 'none',
+            }}
+          >
+            <button
+              type="button"
+              style={styles.actionButton}
+              onClick={() => {
+                onToggleSave(message.messageId, !isSaved);
+                setIsOpen(false);
+                setOffsetX(0);
+              }}
+            >
+              {isSaved ? 'Unsave' : 'Save'}
+            </button>
+          </div>
+        )}
+        <div
+          style={{
+            ...styles.messageGroupOther,
+            transform: enableSaveSwipe ? `translateX(${offsetX}px)` : 'translateX(0)',
+          }}
+          onPointerDown={enableSaveSwipe ? handlePointerDown : undefined}
+          onPointerMove={enableSaveSwipe ? handlePointerMove : undefined}
+          onPointerUp={enableSaveSwipe ? handlePointerUp : undefined}
+          onPointerCancel={enableSaveSwipe ? handlePointerUp : undefined}
+        >
+          <div style={styles.usernameRow}>
+            <span style={styles.username}>{message.senderUsername}</span>
+            <span style={styles.timeOther}>
+              {new Date(message.createdAt).toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
+            {showSavedTag && <span style={styles.savedTag}>Saved</span>}
+            {typeof message.unreadCount === 'number' && message.unreadCount > 0 && (
+              <span style={styles.unreadBadgeOther}>{message.unreadCount}</span>
+            )}
+          </div>
 
-        <div style={styles.bubbleOther}>
-          <div style={styles.messageText}>{message.originalText}</div>
+          <div
+            style={{
+              ...styles.bubbleOther,
+              ...(highlight ? styles.bubbleHighlight : {}),
+            }}
+            onClick={onSelect ? () => onSelect(message.messageId) : undefined}
+          >
+            <div style={styles.messageText}>{message.originalText}</div>
 
-          {/* Translation toggle */}
-          {hasTranslation && (
-            <div style={styles.translationSectionOther}>
-              <button onClick={() => setShowTranslation(!showTranslation)} style={styles.toggleButtonOther}>
-                {showTranslation ? 'Hide' : `View in ${LANGUAGE_NAMES[userLearningLanguage]}`}
-              </button>
+            {/* Translation toggle */}
+            {hasTranslation && (
+              <div style={styles.translationSectionOther}>
+                <button onClick={() => setShowTranslation(!showTranslation)} style={styles.toggleButtonOther}>
+                  {showTranslation ? 'Hide' : `View in ${LANGUAGE_NAMES[userLearningLanguage]}`}
+                </button>
 
-              {showTranslation && (
-                <div style={styles.translationTextOther}>
-                  {translationText}
-                </div>
-              )}
-            </div>
-          )}
+                {showTranslation && (
+                  <div style={styles.translationTextOther}>{translationText}</div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -149,7 +295,15 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'flex-end',
     gap: '8px',
-    maxWidth: '72%',
+    maxWidth: '85%',
+    transition: 'transform 0.15s ease-out',
+    touchAction: 'pan-y',
+  },
+  bubbleStackOwn: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: '4px',
   },
   metaOwn: {
     display: 'flex',
@@ -160,6 +314,10 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '4px',
   },
   timeOwn: {
+    fontSize: '10px',
+    color: 'var(--tg-subtext)',
+  },
+  savedTag: {
     fontSize: '10px',
     color: 'var(--tg-subtext)',
   },
@@ -196,6 +354,51 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '16px',
     padding: '0 18px',
   },
+  swipeWrap: {
+    position: 'relative',
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  swipeWrapOwn: {
+    justifyContent: 'flex-end',
+  },
+  swipeWrapOther: {
+    justifyContent: 'flex-start',
+  },
+  actionAreaOwn: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: '72px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'opacity 0.15s ease-out',
+  },
+  actionAreaOther: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '72px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'opacity 0.15s ease-out',
+  },
+  actionButton: {
+    pointerEvents: 'auto',
+    background: 'var(--tg-panel)',
+    border: '1px solid var(--tg-border)',
+    borderRadius: '999px',
+    padding: '6px 10px',
+    fontSize: '11px',
+    fontWeight: '600',
+    color: 'var(--tg-text)',
+    cursor: 'pointer',
+  },
   avatar: {
     width: '36px',
     height: '36px',
@@ -212,7 +415,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   messageGroupOther: {
     flex: 1,
-    maxWidth: 'calc(72% - 48px)',
+    maxWidth: 'calc(85% - 48px)',
+    transition: 'transform 0.15s ease-out',
+    touchAction: 'pan-y',
   },
   usernameRow: {
     display: 'flex',
@@ -254,6 +459,9 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'inline-block',
     width: 'fit-content',
     maxWidth: '100%',
+  },
+  bubbleHighlight: {
+    boxShadow: '0 0 0 2px rgba(42, 125, 246, 0.2)',
   },
 
   // Common
@@ -316,5 +524,35 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: '1.4',
     color: 'var(--tg-subtext)',
     marginTop: '2px',
+  },
+  feedbackWrapOwn: {
+    alignSelf: 'flex-end',
+    maxWidth: '85%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    paddingRight: '4px',
+  },
+  feedbackTextPass: {
+    fontSize: '11px',
+    color: 'var(--tg-subtext)',
+    background: 'transparent',
+    borderRadius: 0,
+    padding: 0,
+  },
+  feedbackTextFail: {
+    fontSize: '11px',
+    color: '#c53b3b',
+    background: 'transparent',
+    borderRadius: 0,
+    padding: 0,
+  },
+  suggestionText: {
+    fontSize: '11px',
+    color: 'var(--tg-text)',
+    background: 'transparent',
+    borderRadius: 0,
+    padding: 0,
+    fontStyle: 'italic',
   },
 };

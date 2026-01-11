@@ -25,6 +25,9 @@ export type Message = {
 
   translations?: Record<Language, string>; // All available translations
   unreadCount?: number;
+  feedback?: string;
+  feedbackStatus?: 'pass' | 'fail';
+  suggestion?: string;
 };
 
 export type RoomSummary = {

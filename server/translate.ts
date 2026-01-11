@@ -117,43 +117,79 @@ async function translateWithOpenAI(
   const sourceName = LANGUAGE_FULL_NAMES[sourceLang];
   const targetName = LANGUAGE_FULL_NAMES[targetLang];
 
-  console.log(`[Translation] ${sourceLang}->${targetLang}: "${text.substring(0, 50)}..."`);
+  const normalized = text.trim().replace(/\s+/g, ' ');
+  console.log(`[Translation] ${sourceLang}->${targetLang}: "${normalized.substring(0, 50)}..."`);
 
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error('Translation timeout')), TIMEOUT_MS);
-  });
+  const runTranslation = async () => {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Translation timeout')), TIMEOUT_MS);
+    });
 
-  const translationPromise = client.chat.completions.create({
-    model: OPENAI_MODEL,
-    messages: [
-      {
-        role: 'system',
-        content: `You are a professional translator. Translate the given ${sourceName} text to natural ${targetName}.
+    const translationPromise = client.chat.completions.create({
+      model: OPENAI_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: `You are a native ${targetName} speaker. Translate the given ${sourceName} text into natural, colloquial ${targetName} that real locals would actually say.
 Rules:
-- Provide direct, literal translation
-- Maintain the original tone and meaning
-- Output ONLY the translated text, no explanations or additional text
-- Keep the same sentence structure when possible`,
-      },
-      {
-        role: 'user',
-        content: text,
-      },
-    ],
-    temperature: 1,
-    max_completion_tokens: 300,
+- Preserve the original meaning and tone
+- Prefer common, everyday phrasing over textbook-style wording
+- Output ONLY the translated text, no explanations or additional text`,
+        },
+        {
+          role: 'user',
+          content: normalized,
+        },
+      ],
+      temperature: 1,
+      reasoning_effort: 'medium',
+    });
+
+    const completion = await Promise.race([translationPromise, timeoutPromise]);
+    const choice = completion.choices[0];
+    const translatedText = choice?.message?.content?.trim();
+
+    return { translatedText, choice, usage: completion.usage };
+  };
+
+  const primary = await runTranslation();
+  console.log('[Translation] Usage (primary)', {
+    model: OPENAI_MODEL,
+    inputLength: normalized.length,
+    finishReason: primary.choice?.finish_reason,
+    usage: primary.usage,
   });
+  if (!primary.translatedText) {
+    console.warn('[Translation] Empty response (primary)', {
+      model: OPENAI_MODEL,
+      inputLength: normalized.length,
+      finishReason: primary.choice?.finish_reason,
+      usage: primary.usage,
+    });
 
-  const completion = await Promise.race([translationPromise, timeoutPromise]);
+    const retry = await runTranslation();
+    console.log('[Translation] Usage (retry)', {
+      model: OPENAI_MODEL,
+      inputLength: normalized.length,
+      finishReason: retry.choice?.finish_reason,
+      usage: retry.usage,
+    });
+    if (!retry.translatedText) {
+      console.warn('[Translation] Empty response (retry)', {
+        model: OPENAI_MODEL,
+        inputLength: normalized.length,
+        finishReason: retry.choice?.finish_reason,
+        usage: retry.usage,
+      });
+      throw new Error('Empty response from OpenAI');
+    }
 
-  const translatedText = completion.choices[0]?.message?.content?.trim();
-
-  if (!translatedText) {
-    throw new Error('Empty response from OpenAI');
+    console.log(`[Translation] ${sourceLang}->${targetLang}: Success (retry)`);
+    return retry.translatedText;
   }
 
   console.log(`[Translation] ${sourceLang}->${targetLang}: Success`);
-  return translatedText;
+  return primary.translatedText;
 }
 
 /**
